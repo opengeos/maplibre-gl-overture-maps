@@ -137,7 +137,7 @@ The main control class implementing MapLibre's `IControl` interface.
 | `releasesUrl`   | `string`                      | Overture labs releases.json                   | Endpoint listing available releases                                       |
 | `tilesBaseUrl`  | `string`                      | Official Overture S3 tiles URL                | Base URL of the PMTiles distribution                                      |
 | `inspect`       | `boolean`                     | `true`                                        | Click a rendered feature to open a properties popup                       |
-| `exportMinZoom` | `number`                      | `12`                                          | Minimum zoom required to export a layer to GeoJSON (keeps exports small)  |
+| `exportMinZoom` | `number`                      | `12`                                          | Minimum zoom required to export a layer to GeoJSON (keeps exports limited to a small area)  |
 | `visibleThemes` | `OvertureTheme[]`             | `['buildings', 'transportation', 'places']`   | Themes that start visible                                                 |
 | `themeColors`   | `Partial<Record<OvertureTheme, string>>` | x-ray palette                       | Per-theme color overrides                                                 |
 | `themeOpacity`  | `Partial<Record<OvertureTheme, number>>` | `0.8`                               | Per-theme initial opacity (0..1)                                          |

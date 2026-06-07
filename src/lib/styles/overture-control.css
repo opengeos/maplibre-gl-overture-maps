@@ -306,7 +306,8 @@
   font-size: 11px;
 }
 
-/* Transient notice (e.g. export feedback) */
+/* Transient notice (e.g. export feedback). Kept as an aria-live region in
+   the DOM; collapses when empty so screen readers still announce updates. */
 .overture-control-notice {
   margin: 0 0 10px 0;
   padding: 6px 8px;
@@ -315,6 +316,10 @@
   color: var(--ovt-text);
   font-size: 11px;
   border-left: 3px solid var(--ovt-accent);
+}
+
+.overture-control-notice:empty {
+  display: none;
 }
 
 /* Feature inspection toggle */
@@ -488,7 +493,7 @@
 
 .overture-layer-style-btn svg,
 .overture-layer-export-btn svg {
-  stroke: currentColor;
+  stroke: currentcolor;
   fill: none;
 }
 

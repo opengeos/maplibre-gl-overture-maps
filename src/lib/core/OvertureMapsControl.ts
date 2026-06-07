@@ -670,8 +670,11 @@ export class OvertureMapsControl implements IControl {
       this._notify(`Enable ${label} before exporting.`);
       return null;
     }
-    if (this._map.getZoom() < this._options.exportMinZoom) {
-      this._notify(`Zoom in (level ${this._options.exportMinZoom}+) to export ${label}.`);
+    // Coalesce in case a caller passed `exportMinZoom: undefined`, which the
+    // options merge would otherwise leave undefined and bypass the gate.
+    const minZoom = this._options.exportMinZoom ?? DEFAULT_OPTIONS.exportMinZoom;
+    if (this._map.getZoom() < minZoom) {
+      this._notify(`Zoom in (level ${minZoom}+) to export ${label}.`);
       return null;
     }
 
@@ -714,8 +717,9 @@ export class OvertureMapsControl implements IControl {
     if (!this._noticeEl) {
       return;
     }
+    // The element stays in the DOM as an aria-live region; the CSS :empty
+    // rule hides it visually when there is no message.
     this._noticeEl.textContent = message;
-    this._noticeEl.style.display = message ? 'block' : 'none';
     if (this._noticeTimer != null) {
       clearTimeout(this._noticeTimer);
       this._noticeTimer = null;
@@ -723,7 +727,7 @@ export class OvertureMapsControl implements IControl {
     if (message) {
       this._noticeTimer = setTimeout(() => {
         if (this._noticeEl) {
-          this._noticeEl.style.display = 'none';
+          this._noticeEl.textContent = '';
         }
         this._noticeTimer = null;
       }, 5000);
@@ -1240,7 +1244,9 @@ export class OvertureMapsControl implements IControl {
 
     this._noticeEl = document.createElement('div');
     this._noticeEl.className = 'overture-control-notice';
-    this._noticeEl.style.display = 'none';
+    this._noticeEl.setAttribute('role', 'status');
+    this._noticeEl.setAttribute('aria-live', 'polite');
+    this._noticeEl.setAttribute('aria-atomic', 'true');
     content.appendChild(this._noticeEl);
 
     const themeList = document.createElement('div');
