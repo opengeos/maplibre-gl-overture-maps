@@ -1,14 +1,15 @@
 import maplibregl from 'maplibre-gl';
-import { PluginControl } from '../../src/index';
+import { OvertureMapsControl } from '../../src/index';
 import '../../src/index.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-// Create map
+// Create map centered on Lower Manhattan at zoom 14 so all Overture
+// themes (including addresses and places, which appear at z14+) render.
 const map = new maplibregl.Map({
   container: 'map',
   style: 'https://tiles.openfreemap.org/styles/positron',
-  center: [0, 0],
-  zoom: 2,
+  center: [-74.006, 40.7128],
+  zoom: 14,
 });
 
 // Add navigation controls to top-right
@@ -17,34 +18,35 @@ map.addControl(new maplibregl.NavigationControl(), 'top-right');
 // Add fullscreen control to top-right (after navigation)
 map.addControl(new maplibregl.FullscreenControl(), 'top-right');
 
-// Add plugin control when map loads
+// Add the Overture Maps control when the map loads
 map.on('load', () => {
-  // Create the plugin control with custom options
-  // Set collapsed: true to start with just the 29x29 button (like navigation control)
-  const pluginControl = new PluginControl({
-    title: 'My Plugin',
+  const overtureControl = new OvertureMapsControl({
     collapsed: false,
-    panelWidth: 300,
+    visibleThemes: ['buildings', 'transportation', 'places'],
   });
 
   // Add control to the map
-  map.addControl(pluginControl, 'top-right');
+  map.addControl(overtureControl, 'top-right');
 
   // Add Globe control to the map
   map.addControl(new maplibregl.GlobeControl(), 'top-right');
 
   // Listen for state changes
-  pluginControl.on('statechange', (event) => {
-    console.log('Plugin state changed:', event.state);
+  overtureControl.on('statechange', (event) => {
+    console.log('Overture control state changed:', event.state);
   });
 
-  pluginControl.on('collapse', () => {
-    console.log('Plugin panel collapsed');
+  overtureControl.on('releasechange', (event) => {
+    console.log('Overture release changed:', event.state.release);
   });
 
-  pluginControl.on('expand', () => {
-    console.log('Plugin panel expanded');
+  overtureControl.on('themechange', (event) => {
+    console.log('Overture themes changed:', event.state.themes);
   });
 
-  console.log('Plugin control added to map');
+  overtureControl.on('error', (event) => {
+    console.warn('Overture control error:', event.state.error);
+  });
+
+  console.log('Overture Maps control added to map');
 });

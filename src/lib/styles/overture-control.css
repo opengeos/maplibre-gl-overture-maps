@@ -1,0 +1,455 @@
+/**
+ * MapLibre GL Overture Maps Control Styles
+ *
+ * Colors are driven by CSS custom properties so the control adapts to
+ * light and dark color schemes. The scheme follows `prefers-color-scheme`
+ * by default and can be forced with the `.ovt-theme-light` /
+ * `.ovt-theme-dark` classes (set via the `theme` option).
+ */
+
+.overture-control,
+.overture-control-panel,
+.overture-popup-content {
+  --ovt-bg: #ffffff;
+  --ovt-fg: #1f2a37;
+  --ovt-text: #333333;
+  --ovt-muted: #888888;
+  --ovt-border: #e0e0e0;
+  --ovt-input-border: #dddddd;
+  --ovt-input-bg: #ffffff;
+  --ovt-hover: rgba(0, 0, 0, 0.05);
+  --ovt-accent: #4a90d9;
+  --ovt-scrollbar: #cccccc;
+  --ovt-scrollbar-hover: #aaaaaa;
+  --ovt-error-bg: #fdecea;
+  --ovt-error-fg: #b3261e;
+}
+
+/* Dark scheme via system preference (unless a scheme is forced) */
+@media (prefers-color-scheme: dark) {
+  .overture-control:not(.ovt-theme-light),
+  .overture-control-panel:not(.ovt-theme-light),
+  .overture-popup-content:not(.ovt-theme-light) {
+    --ovt-bg: #1f2733;
+    --ovt-fg: #e8edf3;
+    --ovt-text: #dde3ea;
+    --ovt-muted: #9aa5b1;
+    --ovt-border: #38424e;
+    --ovt-input-border: #46515e;
+    --ovt-input-bg: #2a3441;
+    --ovt-hover: rgba(255, 255, 255, 0.08);
+    --ovt-accent: #6aaae4;
+    --ovt-scrollbar: #4a5663;
+    --ovt-scrollbar-hover: #5d6b7a;
+    --ovt-error-bg: #43292b;
+    --ovt-error-fg: #f2b8b5;
+  }
+}
+
+/* Forced dark scheme */
+.overture-control.ovt-theme-dark,
+.overture-control-panel.ovt-theme-dark,
+.overture-popup-content.ovt-theme-dark {
+  --ovt-bg: #1f2733;
+  --ovt-fg: #e8edf3;
+  --ovt-text: #dde3ea;
+  --ovt-muted: #9aa5b1;
+  --ovt-border: #38424e;
+  --ovt-input-border: #46515e;
+  --ovt-input-bg: #2a3441;
+  --ovt-hover: rgba(255, 255, 255, 0.08);
+  --ovt-accent: #6aaae4;
+  --ovt-scrollbar: #4a5663;
+  --ovt-scrollbar-hover: #5d6b7a;
+  --ovt-error-bg: #43292b;
+  --ovt-error-fg: #f2b8b5;
+}
+
+/* Container - matches maplibregl-ctrl styling */
+.overture-control {
+  background: var(--ovt-bg);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Toggle button - 29x29 to match navigation control */
+.overture-control-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 29px;
+  height: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  color: var(--ovt-fg);
+}
+
+.overture-control-toggle:hover {
+  background-color: var(--ovt-hover);
+}
+
+.overture-control-toggle .overture-control-icon {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.overture-control-toggle .overture-control-icon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* Panel - positioned dynamically by JavaScript for floating behavior */
+.overture-control-panel {
+  position: absolute;
+  box-sizing: border-box;
+  /* Position is set dynamically by _updatePanelPosition() */
+  background: var(--ovt-bg);
+  color: var(--ovt-text);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 20px));
+  max-height: min(500px, calc(100vh - 80px));
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  display: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.overture-control-panel.expanded {
+  /* Flex column so the content area absorbs overflow and scrolls */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Panel header */
+.overture-control-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 600;
+  color: var(--ovt-text);
+  padding: 4px 0 8px 0;
+  border-bottom: 1px solid var(--ovt-border);
+  margin-bottom: 8px;
+}
+
+.overture-control-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+}
+
+.overture-control-close {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--ovt-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overture-control-close:hover {
+  color: var(--ovt-text);
+}
+
+/* Content */
+.overture-control-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(400px, calc(100vh - 160px));
+  overflow-y: auto;
+}
+
+/* Scrollbar styling */
+.overture-control-content::-webkit-scrollbar,
+.overture-control-panel::-webkit-scrollbar,
+.overture-popup-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overture-control-content::-webkit-scrollbar-track,
+.overture-control-panel::-webkit-scrollbar-track,
+.overture-popup-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overture-control-content::-webkit-scrollbar-thumb,
+.overture-control-panel::-webkit-scrollbar-thumb,
+.overture-popup-content::-webkit-scrollbar-thumb {
+  background: var(--ovt-scrollbar);
+  border-radius: 3px;
+}
+
+.overture-control-content::-webkit-scrollbar-thumb:hover,
+.overture-control-panel::-webkit-scrollbar-thumb:hover,
+.overture-popup-content::-webkit-scrollbar-thumb:hover {
+  background: var(--ovt-scrollbar-hover);
+}
+
+/* Release selector */
+.overture-release-row {
+  margin-bottom: 10px;
+}
+
+.overture-control-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ovt-text);
+}
+
+.overture-release-select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--ovt-text);
+  background: var(--ovt-input-bg);
+  border: 1px solid var(--ovt-input-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.overture-release-select:focus {
+  border-color: var(--ovt-accent);
+}
+
+/* Error message */
+.overture-control-error {
+  margin: 0 0 10px 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--ovt-error-bg);
+  color: var(--ovt-error-fg);
+  font-size: 11px;
+}
+
+/* Theme rows */
+.overture-control-themes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overture-theme-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 4px;
+}
+
+.overture-theme-row:hover {
+  background: var(--ovt-hover);
+}
+
+.overture-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--ovt-text);
+}
+
+.overture-theme-checkbox {
+  margin: 0;
+  accent-color: var(--ovt-accent);
+  cursor: pointer;
+}
+
+.overture-theme-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.overture-theme-name {
+  flex: 1 1 auto;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.overture-theme-opacity {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--ovt-accent);
+  cursor: pointer;
+}
+
+.overture-theme-opacity:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Hint text */
+.overture-control-hint {
+  margin: 10px 0 0 0;
+  color: var(--ovt-muted);
+  font-size: 11px;
+}
+
+/* Inspect popup */
+.overture-popup .maplibregl-popup-content {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.overture-popup-content {
+  background: var(--ovt-bg);
+  color: var(--ovt-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 180px;
+}
+
+.overture-popup-heading {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--ovt-border);
+}
+
+.overture-popup-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.overture-popup-table td {
+  padding: 2px 4px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.overture-popup-key {
+  color: var(--ovt-muted);
+  white-space: nowrap;
+}
+
+.overture-popup-value {
+  color: var(--ovt-text);
+}
+
+.overture-popup-empty {
+  color: var(--ovt-muted);
+}
+
+/* Form elements (generic, kept for custom panel content) */
+.overture-control-group {
+  margin-bottom: 12px;
+}
+
+.overture-control-group:last-child {
+  margin-bottom: 0;
+}
+
+.overture-control-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--ovt-text);
+  background: var(--ovt-input-bg);
+  border: 1px solid var(--ovt-input-border);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.overture-control-input:focus {
+  border-color: var(--ovt-accent);
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
+}
+
+.overture-control-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background: var(--ovt-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.overture-control-button:hover {
+  filter: brightness(0.92);
+}
+
+.overture-control-button:focus {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 2px;
+}
+
+.overture-control-button:disabled {
+  background: var(--ovt-scrollbar);
+  cursor: not-allowed;
+}
+
+/* Utility classes */
+.overture-control-flex {
+  display: flex;
+  gap: 8px;
+}
+
+.overture-control-flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overture-control-divider {
+  height: 1px;
+  background: var(--ovt-border);
+  margin: 12px 0;
+}
+
+/* Small screens: keep the panel inside the viewport with vertical scrolling */
+@media (max-width: 480px) {
+  .overture-control-panel {
+    min-width: 200px;
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 100px);
+  }
+
+  .overture-control-content {
+    max-height: calc(100vh - 150px);
+  }
+}

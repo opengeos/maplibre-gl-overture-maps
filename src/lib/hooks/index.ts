@@ -1,1 +1,1 @@
-export { usePluginState } from './usePluginState';
+export { useOvertureMapsState } from './useOvertureMapsState';

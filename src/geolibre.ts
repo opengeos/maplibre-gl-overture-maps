@@ -1,6 +1,6 @@
-import { PluginControl } from "./lib/core/PluginControl";
-import type { PluginState } from "./lib/core/types";
-import "./lib/styles/plugin-control.css";
+import { OvertureMapsControl } from "./lib/core/OvertureMapsControl";
+import type { OvertureMapsState } from "./lib/core/types";
+import "./lib/styles/overture-control.css";
 
 type GeoLibreMapControlPosition =
   | "top-left"
@@ -10,10 +10,10 @@ type GeoLibreMapControlPosition =
 
 interface GeoLibreAppAPI {
   addMapControl: (
-    control: PluginControl,
+    control: OvertureMapsControl,
     position?: GeoLibreMapControlPosition,
   ) => boolean;
-  removeMapControl: (control: PluginControl) => void;
+  removeMapControl: (control: OvertureMapsControl) => void;
 }
 
 interface GeoLibrePlugin {
@@ -31,15 +31,16 @@ interface GeoLibrePlugin {
   applyProjectState?: (app: GeoLibreAppAPI, state: unknown) => boolean | void;
 }
 
-let control: PluginControl | null = null;
+let control: OvertureMapsControl | null = null;
 let position: GeoLibreMapControlPosition = "top-right";
-let pendingState: Partial<PluginState> | null = null;
+let pendingState: Partial<OvertureMapsState> | null = null;
 
-function createControl(): PluginControl {
-  const nextControl = new PluginControl({
+function createControl(): OvertureMapsControl {
+  const nextControl = new OvertureMapsControl({
     collapsed: pendingState?.collapsed ?? true,
     panelWidth: pendingState?.panelWidth ?? 300,
-    title: "GeoLibre Plugin Template",
+    release: pendingState?.release || undefined,
+    title: "Overture Maps",
   });
 
   if (pendingState) {
@@ -49,7 +50,9 @@ function createControl(): PluginControl {
   return nextControl;
 }
 
-function isPluginState(value: unknown): value is Partial<PluginState> {
+function isOvertureMapsState(
+  value: unknown,
+): value is Partial<OvertureMapsState> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -61,11 +64,14 @@ function isPluginState(value: unknown): value is Partial<PluginState> {
   if ("panelWidth" in candidate && typeof candidate.panelWidth !== "number") {
     return false;
   }
+  if ("release" in candidate && typeof candidate.release !== "string") {
+    return false;
+  }
   if (
-    "data" in candidate &&
-    (typeof candidate.data !== "object" ||
-      candidate.data === null ||
-      Array.isArray(candidate.data))
+    "themes" in candidate &&
+    (typeof candidate.themes !== "object" ||
+      candidate.themes === null ||
+      Array.isArray(candidate.themes))
   ) {
     return false;
   }
@@ -74,8 +80,8 @@ function isPluginState(value: unknown): value is Partial<PluginState> {
 }
 
 export const plugin: GeoLibrePlugin = {
-  id: "geolibre-plugin-template",
-  name: "GeoLibre Plugin Template",
+  id: "maplibre-gl-overture-maps",
+  name: "MapLibre GL Overture Maps",
   version: "0.1.0",
   activate(app) {
     control = control ?? createControl();
@@ -110,7 +116,7 @@ export const plugin: GeoLibrePlugin = {
     return control?.getState() ?? pendingState ?? undefined;
   },
   applyProjectState(_app, state) {
-    if (!isPluginState(state)) return false;
+    if (!isOvertureMapsState(state)) return false;
     pendingState = state;
     control?.setState(state);
   },

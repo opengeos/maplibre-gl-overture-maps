@@ -32,7 +32,7 @@ export default defineConfig({
         index: resolve(__dirname, "src/index.ts"),
         react: resolve(__dirname, "src/react.ts"),
       },
-      name: "GeoLibrePluginTemplate",
+      name: "MaplibreGlOvertureMaps",
       formats: ["es", "cjs"],
       fileName: (format, entryName) => {
         const ext = format === "es" ? "mjs" : "cjs";
@@ -49,7 +49,7 @@ export default defineConfig({
         },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name === "style.css")
-            return "geolibre-plugin-template.css";
+            return "maplibre-gl-overture-maps.css";
           return assetInfo.name || "";
         },
       },

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import maplibregl, { Map } from 'maplibre-gl';
-import { PluginControlReact, usePluginState } from '../../src/react';
+import { OvertureMapsControlReact, useOvertureMapsState } from '../../src/react';
 import '../../src/index.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -11,7 +11,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 function App() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<Map | null>(null);
-  const { state, toggle } = usePluginState({ collapsed: false });
+  const { state, setState, toggle } = useOvertureMapsState({ collapsed: false });
 
   // Initialize the map
   useEffect(() => {
@@ -20,8 +20,8 @@ function App() {
     const mapInstance = new maplibregl.Map({
       container: mapContainer.current,
       style: 'https://tiles.openfreemap.org/styles/positron',
-      center: [0, 0],
-      zoom: 2,
+      center: [-74.006, 40.7128],
+      zoom: 14,
     });
 
     // Add navigation controls to top-right
@@ -40,7 +40,10 @@ function App() {
   }, []);
 
   const handleStateChange = (newState: typeof state) => {
-    console.log('Plugin state changed:', newState);
+    console.log('Overture control state changed:', newState);
+    // Keep the hook state in sync so the external button label matches
+    // the actual panel state (e.g. after click-outside collapses it).
+    setState(newState);
   };
 
   return (
@@ -67,13 +70,13 @@ function App() {
         {state.collapsed ? 'Expand' : 'Collapse'} Panel
       </button>
 
-      {/* Plugin control */}
+      {/* Overture Maps control */}
       {map && (
-        <PluginControlReact
+        <OvertureMapsControlReact
           map={map}
-          title="React Plugin"
           collapsed={state.collapsed}
           panelWidth={320}
+          visibleThemes={['buildings', 'transportation', 'places']}
           onStateChange={handleStateChange}
         />
       )}

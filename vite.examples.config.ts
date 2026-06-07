@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  base: "/geolibre-plugin-template/",
+  base: "/maplibre-gl-overture-maps/",
   build: {
     outDir: "dist-examples",
     rollupOptions: {

@@ -1,9 +1,19 @@
 import type { Map } from 'maplibre-gl';
+import type { OvertureTheme } from './themes';
 
 /**
- * Options for configuring the PluginControl
+ * UI color scheme for the control.
+ *
+ * - `'light'` forces light colors
+ * - `'dark'` forces dark colors
+ * - `'auto'` follows the browser's `prefers-color-scheme`
  */
-export interface PluginControlOptions {
+export type ControlColorScheme = 'light' | 'dark' | 'auto';
+
+/**
+ * Options for configuring the OvertureMapsControl
+ */
+export interface OvertureMapsControlOptions {
   /**
    * Whether the control panel should start collapsed (showing only the toggle button)
    * @default true
@@ -18,7 +28,7 @@ export interface PluginControlOptions {
 
   /**
    * Title displayed in the control header
-   * @default 'Plugin Control'
+   * @default 'Overture Maps'
    */
   title?: string;
 
@@ -32,12 +42,69 @@ export interface PluginControlOptions {
    * Custom CSS class name for the control container
    */
   className?: string;
+
+  /**
+   * UI color scheme for the control
+   * @default 'auto'
+   */
+  theme?: ControlColorScheme;
+
+  /**
+   * Pin a specific Overture release (e.g. `'2026-05-20.0'`).
+   * When omitted, the latest release from {@link releasesUrl} is used.
+   */
+  release?: string;
+
+  /**
+   * Endpoint listing available Overture releases
+   * @default 'https://labs.overturemaps.org/data/releases.json'
+   */
+  releasesUrl?: string;
+
+  /**
+   * Base URL of the Overture PMTiles distribution (no trailing slash)
+   * @default 'https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles'
+   */
+  tilesBaseUrl?: string;
+
+  /**
+   * Whether clicking a rendered Overture feature opens a properties popup
+   * @default true
+   */
+  inspect?: boolean;
+
+  /**
+   * Themes that start visible
+   * @default ['buildings', 'transportation', 'places']
+   */
+  visibleThemes?: OvertureTheme[];
+
+  /**
+   * Per-theme color overrides (hex colors)
+   */
+  themeColors?: Partial<Record<OvertureTheme, string>>;
+
+  /**
+   * Per-theme initial opacity overrides (0..1)
+   * @default 0.8 for every theme
+   */
+  themeOpacity?: Partial<Record<OvertureTheme, number>>;
 }
 
 /**
- * Internal state of the plugin control
+ * Visibility and opacity of a single Overture theme.
  */
-export interface PluginState {
+export interface OvertureThemeState {
+  /** Whether the theme layers are on the map */
+  visible: boolean;
+  /** Theme opacity (0..1) */
+  opacity: number;
+}
+
+/**
+ * Internal state of the Overture Maps control
+ */
+export interface OvertureMapsState {
   /**
    * Whether the control panel is currently collapsed
    */
@@ -49,15 +116,30 @@ export interface PluginState {
   panelWidth: number;
 
   /**
-   * Any custom state data
+   * The active Overture release
    */
-  data?: Record<string, unknown>;
+  release: string;
+
+  /**
+   * Available Overture releases (newest first)
+   */
+  releases: string[];
+
+  /**
+   * Per-theme visibility and opacity
+   */
+  themes: Record<OvertureTheme, OvertureThemeState>;
+
+  /**
+   * Last error message, or null when healthy
+   */
+  error?: string | null;
 }
 
 /**
  * Props for the React wrapper component
  */
-export interface PluginControlReactProps extends PluginControlOptions {
+export interface OvertureMapsControlReactProps extends OvertureMapsControlOptions {
   /**
    * MapLibre GL map instance
    */
@@ -66,15 +148,24 @@ export interface PluginControlReactProps extends PluginControlOptions {
   /**
    * Callback fired when the control state changes
    */
-  onStateChange?: (state: PluginState) => void;
+  onStateChange?: (state: OvertureMapsState) => void;
 }
 
 /**
- * Event types emitted by the plugin control
+ * Event types emitted by the Overture Maps control
  */
-export type PluginControlEvent = 'collapse' | 'expand' | 'statechange';
+export type OvertureMapsEvent =
+  | 'collapse'
+  | 'expand'
+  | 'statechange'
+  | 'releasechange'
+  | 'themechange'
+  | 'error';
 
 /**
  * Event handler function type
  */
-export type PluginControlEventHandler = (event: { type: PluginControlEvent; state: PluginState }) => void;
+export type OvertureMapsEventHandler = (event: {
+  type: OvertureMapsEvent;
+  state: OvertureMapsState;
+}) => void;

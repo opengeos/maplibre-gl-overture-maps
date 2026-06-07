@@ -1,16 +1,16 @@
 import { useEffect, useRef } from "react";
-import { PluginControl } from "./PluginControl";
-import type { PluginControlReactProps } from "./types";
+import { OvertureMapsControl } from "./OvertureMapsControl";
+import type { OvertureMapsControlReactProps } from "./types";
 
 /**
- * React wrapper component for PluginControl.
+ * React wrapper component for OvertureMapsControl.
  *
- * This component manages the lifecycle of a PluginControl instance,
+ * This component manages the lifecycle of an OvertureMapsControl instance,
  * adding it to the map on mount and removing it on unmount.
  *
  * @example
  * ```tsx
- * import { PluginControlReact } from 'geolibre-plugin-template/react';
+ * import { OvertureMapsControlReact } from 'maplibre-gl-overture-maps/react';
  *
  * function MyMap() {
  *   const [map, setMap] = useState<Map | null>(null);
@@ -19,10 +19,10 @@ import type { PluginControlReactProps } from "./types";
  *     <>
  *       <div ref={mapContainer} />
  *       {map && (
- *         <PluginControlReact
+ *         <OvertureMapsControlReact
  *           map={map}
- *           title="My Control"
  *           collapsed={false}
+ *           visibleThemes={['buildings', 'places']}
  *         />
  *       )}
  *     </>
@@ -33,18 +33,18 @@ import type { PluginControlReactProps } from "./types";
  * @param props - Component props including map instance and control options
  * @returns null - This component renders nothing directly
  */
-export function PluginControlReact({
+export function OvertureMapsControlReact({
   map,
   onStateChange,
   ...options
-}: PluginControlReactProps): null {
-  const controlRef = useRef<PluginControl | null>(null);
+}: OvertureMapsControlReactProps): null {
+  const controlRef = useRef<OvertureMapsControl | null>(null);
 
   useEffect(() => {
     if (!map) return;
 
     // Create the control instance
-    const control = new PluginControl(options);
+    const control = new OvertureMapsControl(options);
     controlRef.current = control;
 
     // Register state change handler if provided
@@ -83,6 +83,13 @@ export function PluginControlReact({
       }
     }
   }, [options.collapsed]);
+
+  // Sync pinned release changes
+  useEffect(() => {
+    if (controlRef.current && options.release) {
+      controlRef.current.setRelease(options.release);
+    }
+  }, [options.release]);
 
   return null;
 }

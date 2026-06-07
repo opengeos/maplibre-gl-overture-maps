@@ -1,16 +1,47 @@
 // Import styles
-import './lib/styles/plugin-control.css';
+import './lib/styles/overture-control.css';
 
 // Main entry point - Core exports
-export { PluginControl } from './lib/core/PluginControl';
+export { OvertureMapsControl } from './lib/core/OvertureMapsControl';
+
+// Overture theme metadata and helpers
+export {
+  THEMES,
+  THEME_IDS,
+  buildLayerSpecs,
+  layerIdsForTheme,
+  sourceIdForTheme,
+  tileUrlForTheme,
+  opacityPropertyForLayerType,
+} from './lib/core/themes';
+
+// Releases helpers
+export {
+  fetchReleases,
+  DEFAULT_RELEASES_URL,
+  DEFAULT_TILES_BASE_URL,
+  FALLBACK_RELEASE,
+} from './lib/core/releases';
+
+// PMTiles protocol registration
+export { ensurePmtilesProtocol } from './lib/core/pmtilesProtocol';
 
 // Type exports
 export type {
-  PluginControlOptions,
-  PluginState,
-  PluginControlEvent,
-  PluginControlEventHandler,
+  OvertureMapsControlOptions,
+  OvertureMapsState,
+  OvertureThemeState,
+  OvertureMapsEvent,
+  OvertureMapsEventHandler,
+  ControlColorScheme,
 } from './lib/core/types';
+export type {
+  OvertureTheme,
+  OvertureGeometry,
+  OvertureLayerDef,
+  ThemeDefinition,
+} from './lib/core/themes';
+export type { ReleasesResponse } from './lib/core/releases';
 
 // Utility exports
 export {
