@@ -554,6 +554,11 @@
   border-radius: 3px;
 }
 
+.overture-layer-color:focus-visible {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 1px;
+}
+
 /* Hint text */
 .overture-control-hint {
   margin: 10px 0 0 0;

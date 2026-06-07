@@ -198,7 +198,9 @@ const {
 
 ### Exported Types
 
-`OvertureMapsControlOptions`, `OvertureMapsState`, `OvertureThemeState`, `OvertureLayerState`, `OvertureMapsControlReactProps`, `OvertureMapsEvent`, `OvertureMapsEventHandler`, `OvertureTheme`, `OvertureGeometry`, `OvertureLayerDef`, `ThemeDefinition`, `ControlColorScheme`, and `ReleasesResponse` are exported from both entry points (React-specific types from `/react`).
+Exported from both entry points: `OvertureMapsControlOptions`, `OvertureMapsState`, `OvertureThemeState`, `OvertureLayerState`, `OvertureMapsEvent`, `OvertureMapsEventHandler`, `OvertureTheme`, `OvertureGeometry`, `OvertureLayerDef`, `ThemeDefinition`, and `ControlColorScheme`.
+
+Main entry only (`.`): `ReleasesResponse`. React entry only (`/react`): `OvertureMapsControlReactProps`.
 
 Helpers are also exported: `THEMES`, `THEME_IDS`, `buildLayerSpecs`, `layerIdsForTheme`, `sourceIdForTheme`, `tileUrlForTheme`, `fetchReleases`, `ensurePmtilesProtocol`, and more.
 
