@@ -1,14 +1,22 @@
 // React entry point
-export { PluginControlReact } from './lib/core/PluginControlReact';
+export { OvertureMapsControlReact } from './lib/core/OvertureMapsControlReact';
 
 // React hooks
-export { usePluginState } from './lib/hooks';
+export { useOvertureMapsState } from './lib/hooks';
 
 // Re-export types for React consumers
 export type {
-  PluginControlOptions,
-  PluginState,
-  PluginControlReactProps,
-  PluginControlEvent,
-  PluginControlEventHandler,
+  OvertureMapsControlOptions,
+  OvertureMapsState,
+  OvertureThemeState,
+  OvertureMapsControlReactProps,
+  OvertureMapsEvent,
+  OvertureMapsEventHandler,
+  ControlColorScheme,
 } from './lib/core/types';
+export type {
+  OvertureTheme,
+  OvertureGeometry,
+  OvertureLayerDef,
+  ThemeDefinition,
+} from './lib/core/themes';

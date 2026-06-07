@@ -1,8 +1,8 @@
 {
-  "id": "geolibre-plugin-template",
-  "name": "GeoLibre Plugin Template",
+  "id": "maplibre-gl-overture-maps",
+  "name": "MapLibre GL Overture Maps",
   "version": "0.1.0",
   "entry": "dist/index.js",
-  "description": "A starter GeoLibre plugin bundle with a MapLibre control.",
+  "description": "Visualize Overture Maps PMTiles themes with a MapLibre control.",
   "style": "dist/style.css"
 }
