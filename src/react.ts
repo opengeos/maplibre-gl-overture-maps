@@ -9,6 +9,7 @@ export type {
   OvertureMapsControlOptions,
   OvertureMapsState,
   OvertureThemeState,
+  OvertureLayerState,
   OvertureMapsControlReactProps,
   OvertureMapsEvent,
   OvertureMapsEventHandler,

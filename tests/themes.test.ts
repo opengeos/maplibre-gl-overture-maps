@@ -3,24 +3,29 @@ import {
   THEMES,
   THEME_IDS,
   buildLayerSpecs,
+  buildSourceLayerSpecs,
   layerIdsForTheme,
+  layerIdsForSourceLayer,
   sourceIdForTheme,
   tileUrlForTheme,
   opacityPropertyForLayerType,
+  colorPropertyForLayerType,
+  sizePropertyForLayerType,
+  defaultSizeForGeometry,
   effectiveOpacity,
   FILL_OPACITY_RATIO,
 } from '../src/lib/core/themes';
 import type { OvertureTheme } from '../src/lib/core/themes';
 
 describe('THEMES', () => {
-  it('defines all six Overture themes', () => {
+  it('defines all six Overture themes in panel (top-to-bottom) order', () => {
     expect(THEME_IDS).toEqual([
       'addresses',
-      'base',
-      'buildings',
-      'divisions',
       'places',
       'transportation',
+      'buildings',
+      'divisions',
+      'base',
     ]);
   });
 
@@ -148,6 +153,97 @@ describe('opacityPropertyForLayerType', () => {
     expect(opacityPropertyForLayerType('fill')).toBe('fill-opacity');
     expect(opacityPropertyForLayerType('line')).toBe('line-opacity');
     expect(opacityPropertyForLayerType('circle')).toBe('circle-opacity');
+  });
+});
+
+describe('colorPropertyForLayerType', () => {
+  it('returns the matching paint property', () => {
+    expect(colorPropertyForLayerType('fill')).toBe('fill-color');
+    expect(colorPropertyForLayerType('line')).toBe('line-color');
+    expect(colorPropertyForLayerType('circle')).toBe('circle-color');
+  });
+});
+
+describe('sizePropertyForLayerType', () => {
+  it('maps circle and line to their size property and fill to null', () => {
+    expect(sizePropertyForLayerType('circle')).toBe('circle-radius');
+    expect(sizePropertyForLayerType('line')).toBe('line-width');
+    expect(sizePropertyForLayerType('fill')).toBeNull();
+  });
+});
+
+describe('defaultSizeForGeometry', () => {
+  it('returns geometry-appropriate defaults', () => {
+    expect(defaultSizeForGeometry('point')).toBe(3);
+    expect(defaultSizeForGeometry('line')).toBe(1);
+    expect(defaultSizeForGeometry('polygon')).toBe(0.8);
+  });
+});
+
+describe('buildSourceLayerSpecs size override', () => {
+  it('applies a custom circle radius for points', () => {
+    const [circle] = buildSourceLayerSpecs('places', 'place', 1, undefined, 7);
+    expect((circle.paint as Record<string, unknown>)['circle-radius']).toBe(7);
+  });
+
+  it('applies a custom line width for lines', () => {
+    const [line] = buildSourceLayerSpecs('transportation', 'segment', 1, undefined, 4);
+    expect((line.paint as Record<string, unknown>)['line-width']).toBe(4);
+  });
+
+  it('applies a custom outline width for polygons', () => {
+    const specs = buildSourceLayerSpecs('buildings', 'building', 1, undefined, 2.5);
+    const outline = specs.find((s) => s.type === 'line');
+    expect((outline!.paint as Record<string, unknown>)['line-width']).toBe(2.5);
+  });
+
+  it('falls back to the geometry default size', () => {
+    const [circle] = buildSourceLayerSpecs('places', 'place', 1);
+    expect((circle.paint as Record<string, unknown>)['circle-radius']).toBe(3);
+  });
+});
+
+describe('buildSourceLayerSpecs', () => {
+  it('builds specs for a single source layer only', () => {
+    const specs = buildSourceLayerSpecs('base', 'water', 0.8);
+    expect(specs.length).toBeGreaterThan(0);
+    for (const spec of specs) {
+      expect((spec as { 'source-layer': string })['source-layer']).toBe('water');
+      expect(spec.source).toBe('overture-base');
+    }
+  });
+
+  it('returns an empty array for an unknown source layer', () => {
+    expect(buildSourceLayerSpecs('base', 'not_a_layer', 1)).toEqual([]);
+  });
+
+  it('honors a per-layer color override', () => {
+    const [fill] = buildSourceLayerSpecs('buildings', 'building', 1, '#abcdef');
+    expect((fill.paint as Record<string, unknown>)['fill-color']).toBe('#abcdef');
+  });
+
+  it('is a subset of the full theme specs', () => {
+    const all = buildLayerSpecs('transportation', 1).map((s) => s.id);
+    for (const sl of THEMES.transportation.layers.map((l) => l.sourceLayer)) {
+      for (const id of layerIdsForSourceLayer('transportation', sl)) {
+        expect(all).toContain(id);
+      }
+    }
+  });
+});
+
+describe('layerIdsForSourceLayer', () => {
+  it('round-trips with buildSourceLayerSpecs', () => {
+    const ids = layerIdsForSourceLayer('divisions', 'division_area');
+    const specIds = buildSourceLayerSpecs('divisions', 'division_area', 0.5).map((s) => s.id);
+    expect(ids).toEqual(specIds);
+  });
+
+  it('partitions a theme into its source layers', () => {
+    const perLayer = THEMES.base.layers.flatMap((l) =>
+      layerIdsForSourceLayer('base', l.sourceLayer)
+    );
+    expect(perLayer.sort()).toEqual(layerIdsForTheme('base').sort());
   });
 });
 

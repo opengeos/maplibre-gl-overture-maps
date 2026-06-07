@@ -65,7 +65,14 @@
   --ovt-error-fg: #f2b8b5;
 }
 
-/* Container - matches maplibregl-ctrl styling */
+/* Container - matches maplibregl-ctrl styling.
+   The compound selector raises specificity above maplibre's default
+   .maplibregl-ctrl-group white background so the icon (currentColor)
+   keeps good contrast in dark mode regardless of stylesheet order. */
+.maplibregl-ctrl-group.overture-control {
+  background: var(--ovt-bg);
+}
+
 .overture-control {
   background: var(--ovt-bg);
   border-radius: 4px;
@@ -125,7 +132,7 @@
   border-radius: 4px;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
   min-width: 240px;
-  max-width: min(420px, calc(100vw - 20px));
+  max-width: min(600px, calc(100vw - 20px));
   max-height: min(500px, calc(100vh - 80px));
   overflow-y: auto;
   z-index: 1000;
@@ -140,6 +147,52 @@
   /* Flex column so the content area absorbs overflow and scrolls */
   display: flex;
   flex-direction: column;
+}
+
+.overture-control-panel.resizing {
+  user-select: none;
+}
+
+/* Panel resize handle - sits on the edge away from the anchored side */
+.overture-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.overture-control-panel.ovt-anchor-left .overture-resize-handle {
+  right: 0;
+}
+
+.overture-control-panel.ovt-anchor-right .overture-resize-handle {
+  left: 0;
+}
+
+.overture-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--ovt-border);
+  transform: translateY(-50%);
+}
+
+.overture-control-panel.ovt-anchor-left .overture-resize-handle::before {
+  right: 2px;
+}
+
+.overture-control-panel.ovt-anchor-right .overture-resize-handle::before {
+  left: 2px;
+}
+
+.overture-resize-handle:hover::before {
+  background: var(--ovt-accent);
 }
 
 /* Panel header */
@@ -253,26 +306,94 @@
   font-size: 11px;
 }
 
-/* Theme rows */
+/* Transient notice (e.g. export feedback). Kept as an aria-live region in
+   the DOM; collapses when empty so screen readers still announce updates. */
+.overture-control-notice {
+  margin: 0 0 10px 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--ovt-hover);
+  color: var(--ovt-text);
+  font-size: 11px;
+  border-left: 3px solid var(--ovt-accent);
+}
+
+.overture-control-notice:empty {
+  display: none;
+}
+
+/* Feature inspection toggle */
+.overture-inspect-row {
+  margin: 0 0 10px 0;
+}
+
+.overture-inspect-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--ovt-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.overture-inspect-checkbox {
+  margin: 0;
+  accent-color: var(--ovt-accent);
+  cursor: pointer;
+}
+
+/* Theme groups */
 .overture-control-themes {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.overture-theme-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 4px;
+.overture-theme-group {
   border-radius: 4px;
 }
 
-.overture-theme-row:hover {
+.overture-theme-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.overture-theme-header:hover {
   background: var(--ovt-hover);
 }
 
+.overture-theme-caret {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ovt-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.overture-theme-group.expanded .overture-theme-caret {
+  transform: rotate(90deg);
+}
+
+.overture-theme-caret:focus-visible {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 1px;
+}
+
 .overture-theme-toggle {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -286,30 +407,181 @@
   cursor: pointer;
 }
 
-.overture-theme-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  flex: 0 0 auto;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
-}
-
 .overture-theme-name {
   flex: 1 1 auto;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.overture-theme-opacity {
-  width: 100%;
+/* Layer rows (shown when the theme group is expanded) */
+.overture-theme-layers {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px 6px 22px;
+}
+
+.overture-theme-group.expanded .overture-theme-layers {
+  display: flex;
+}
+
+.overture-layer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+
+.overture-layer-row:hover {
+  background: var(--ovt-hover);
+}
+
+.overture-layer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overture-layer-toggle {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--ovt-text);
+  min-width: 0;
+}
+
+.overture-layer-checkbox {
   margin: 0;
   accent-color: var(--ovt-accent);
   cursor: pointer;
 }
 
-.overture-theme-opacity:disabled {
+.overture-layer-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.overture-layer-name {
+  flex: 1 1 auto;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overture-layer-style-btn,
+.overture-layer-export-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ovt-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overture-layer-style-btn svg,
+.overture-layer-export-btn svg {
+  stroke: currentcolor;
+  fill: none;
+}
+
+.overture-layer-style-btn:hover,
+.overture-layer-export-btn:hover:not(:disabled) {
+  background: var(--ovt-hover);
+  color: var(--ovt-text);
+}
+
+.overture-layer-row.editing .overture-layer-style-btn {
+  color: var(--ovt-accent);
+}
+
+.overture-layer-export-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.overture-layer-style-btn:focus-visible,
+.overture-layer-export-btn:focus-visible {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 1px;
+}
+
+/* Inline per-layer style editor (shown when the row is editing) */
+.overture-layer-editor {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 4px 6px 24px;
+}
+
+.overture-layer-row.editing .overture-layer-editor {
+  display: flex;
+}
+
+.overture-style-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ovt-muted);
+  font-size: 11px;
+}
+
+.overture-style-field > span {
+  flex: 0 0 48px;
+}
+
+.overture-style-field input[type='range'] {
+  flex: 1 1 auto;
+  margin: 0;
+  accent-color: var(--ovt-accent);
+  cursor: pointer;
+}
+
+.overture-style-field input[type='range']:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.overture-layer-color {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+}
+
+.overture-layer-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.overture-layer-color::-webkit-color-swatch {
+  border: 1px solid var(--ovt-border);
+  border-radius: 3px;
+}
+
+.overture-layer-color::-moz-color-swatch {
+  border: 1px solid var(--ovt-border);
+  border-radius: 3px;
+}
+
+.overture-layer-color:focus-visible {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 1px;
 }
 
 /* Hint text */

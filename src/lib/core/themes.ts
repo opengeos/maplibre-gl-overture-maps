@@ -110,8 +110,19 @@ export const THEMES: Record<OvertureTheme, ThemeDefinition> = {
 
 /**
  * Ordered list of all Overture theme identifiers.
+ *
+ * This is the panel display order (top to bottom). The control draws the
+ * first theme on top of the map and the last theme at the bottom, so the
+ * detail themes (addresses, places) sit above the background (base).
  */
-export const THEME_IDS = Object.keys(THEMES) as OvertureTheme[];
+export const THEME_IDS: OvertureTheme[] = [
+  'addresses',
+  'places',
+  'transportation',
+  'buildings',
+  'divisions',
+  'base',
+];
 
 /**
  * Returns the map source id used for a theme.
@@ -158,6 +169,60 @@ export function opacityPropertyForLayerType(
   return `${layerType}-opacity` as 'fill-opacity' | 'line-opacity' | 'circle-opacity';
 }
 
+/**
+ * Returns the color paint property name for a layer type.
+ *
+ * @param layerType - The MapLibre layer type
+ * @returns The matching paint property, e.g. `fill-color`
+ */
+export function colorPropertyForLayerType(
+  layerType: 'fill' | 'line' | 'circle'
+): 'fill-color' | 'line-color' | 'circle-color' {
+  return `${layerType}-color` as 'fill-color' | 'line-color' | 'circle-color';
+}
+
+/**
+ * Returns the size paint property name for a layer type.
+ *
+ * Fill layers have no size dimension and return null.
+ *
+ * @param layerType - The MapLibre layer type
+ * @returns The matching paint property, or null for fills
+ */
+export function sizePropertyForLayerType(
+  layerType: 'fill' | 'line' | 'circle'
+): 'circle-radius' | 'line-width' | null {
+  if (layerType === 'circle') return 'circle-radius';
+  if (layerType === 'line') return 'line-width';
+  return null;
+}
+
+/**
+ * Returns the default size (circle radius or line width) for a geometry.
+ *
+ * @param geometry - The source-layer geometry
+ * @returns The default size in pixels
+ */
+export function defaultSizeForGeometry(geometry: OvertureGeometry): number {
+  if (geometry === 'point') return 3;
+  if (geometry === 'line') return 1;
+  return 0.8;
+}
+
+/**
+ * Finds the source-layer definition for a theme.
+ *
+ * @param theme - The Overture theme identifier
+ * @param sourceLayer - The source-layer name
+ * @returns The layer definition, or undefined when not part of the theme
+ */
+export function findLayerDef(
+  theme: OvertureTheme,
+  sourceLayer: string
+): OvertureLayerDef | undefined {
+  return THEMES[theme].layers.find((layer) => layer.sourceLayer === sourceLayer);
+}
+
 /** Fill layers are kept translucent relative to the theme opacity for an x-ray look. */
 export const FILL_OPACITY_RATIO = 0.3;
 
@@ -191,62 +256,127 @@ export function buildLayerSpecs(
   const def = THEMES[theme];
   const themeColor = color ?? def.color;
   const sourceId = sourceIdForTheme(theme);
-  const specs: LayerSpecification[] = [];
+  return def.layers.flatMap((layer) => specsForLayer(sourceId, layer, opacity, themeColor));
+}
 
-  for (const layer of def.layers) {
-    const idBase = `${sourceId}-${layer.sourceLayer}`;
+/**
+ * Builds the MapLibre layer specifications for a single source layer of a
+ * theme. Use this to render and restyle layers independently.
+ *
+ * @param theme - The Overture theme identifier
+ * @param sourceLayer - The source-layer name (e.g. `water`)
+ * @param opacity - The layer opacity (0..1)
+ * @param color - Optional color override (defaults to the theme x-ray color)
+ * @param size - Optional size override (circle radius / line width); defaults
+ *   to the geometry's default size
+ * @returns Layer specifications ready for `map.addLayer`
+ */
+export function buildSourceLayerSpecs(
+  theme: OvertureTheme,
+  sourceLayer: string,
+  opacity: number,
+  color?: string,
+  size?: number
+): LayerSpecification[] {
+  const layer = findLayerDef(theme, sourceLayer);
+  if (!layer) {
+    return [];
+  }
+  return specsForLayer(
+    sourceIdForTheme(theme),
+    layer,
+    opacity,
+    color ?? THEMES[theme].color,
+    size
+  );
+}
 
-    if (layer.geometry === 'polygon') {
-      specs.push({
+/**
+ * Returns the MapLibre layer ids used to render a single source layer.
+ *
+ * @param theme - The Overture theme identifier
+ * @param sourceLayer - The source-layer name
+ * @returns Layer ids in the order they are added to the map
+ */
+export function layerIdsForSourceLayer(theme: OvertureTheme, sourceLayer: string): string[] {
+  return buildSourceLayerSpecs(theme, sourceLayer, 1).map((spec) => spec.id);
+}
+
+/**
+ * Builds the MapLibre layer specs for one source-layer definition.
+ *
+ * @param sourceId - The map source id
+ * @param layer - The source-layer definition
+ * @param opacity - The layer opacity (0..1)
+ * @param color - The layer color
+ * @returns Layer specifications for the source layer
+ */
+function specsForLayer(
+  sourceId: string,
+  layer: OvertureLayerDef,
+  opacity: number,
+  color: string,
+  size?: number
+): LayerSpecification[] {
+  const idBase = `${sourceId}-${layer.sourceLayer}`;
+  const px = size ?? defaultSizeForGeometry(layer.geometry);
+
+  if (layer.geometry === 'polygon') {
+    return [
+      {
         id: `${idBase}-fill`,
         type: 'fill',
         source: sourceId,
         'source-layer': layer.sourceLayer,
         paint: {
-          'fill-color': themeColor,
+          'fill-color': color,
           'fill-opacity': effectiveOpacity('fill', opacity),
         },
-      });
-      specs.push({
+      },
+      {
         id: `${idBase}-line`,
         type: 'line',
         source: sourceId,
         'source-layer': layer.sourceLayer,
         paint: {
-          'line-color': themeColor,
-          'line-width': 0.8,
+          'line-color': color,
+          'line-width': px,
           'line-opacity': effectiveOpacity('line', opacity),
         },
-      });
-    } else if (layer.geometry === 'line') {
-      specs.push({
-        id: `${idBase}-line`,
-        type: 'line',
-        source: sourceId,
-        'source-layer': layer.sourceLayer,
-        paint: {
-          'line-color': themeColor,
-          'line-width': 1,
-          'line-opacity': effectiveOpacity('line', opacity),
-        },
-      });
-    } else {
-      specs.push({
-        id: `${idBase}-circle`,
-        type: 'circle',
-        source: sourceId,
-        'source-layer': layer.sourceLayer,
-        paint: {
-          'circle-color': themeColor,
-          'circle-radius': 3,
-          'circle-opacity': effectiveOpacity('circle', opacity),
-          'circle-stroke-width': 0.5,
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-opacity': effectiveOpacity('circle', opacity),
-        },
-      });
-    }
+      },
+    ];
   }
 
-  return specs;
+  if (layer.geometry === 'line') {
+    return [
+      {
+        id: `${idBase}-line`,
+        type: 'line',
+        source: sourceId,
+        'source-layer': layer.sourceLayer,
+        paint: {
+          'line-color': color,
+          'line-width': px,
+          'line-opacity': effectiveOpacity('line', opacity),
+        },
+      },
+    ];
+  }
+
+  return [
+    {
+      id: `${idBase}-circle`,
+      type: 'circle',
+      source: sourceId,
+      'source-layer': layer.sourceLayer,
+      paint: {
+        'circle-color': color,
+        'circle-radius': px,
+        'circle-opacity': effectiveOpacity('circle', opacity),
+        'circle-stroke-width': 0.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-opacity': effectiveOpacity('circle', opacity),
+      },
+    },
+  ];
 }
