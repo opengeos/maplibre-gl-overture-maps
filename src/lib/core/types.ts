@@ -74,6 +74,13 @@ export interface OvertureMapsControlOptions {
   inspect?: boolean;
 
   /**
+   * Minimum map zoom required to export a layer to GeoJSON. This keeps
+   * exports limited to a small area.
+   * @default 12
+   */
+  exportMinZoom?: number;
+
+  /**
    * Themes that start visible
    * @default ['buildings', 'transportation', 'places']
    */

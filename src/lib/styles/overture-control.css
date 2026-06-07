@@ -306,6 +306,17 @@
   font-size: 11px;
 }
 
+/* Transient notice (e.g. export feedback) */
+.overture-control-notice {
+  margin: 0 0 10px 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--ovt-hover);
+  color: var(--ovt-text);
+  font-size: 11px;
+  border-left: 3px solid var(--ovt-accent);
+}
+
 /* Feature inspection toggle */
 .overture-inspect-row {
   margin: 0 0 10px 0;
@@ -459,7 +470,8 @@
   white-space: nowrap;
 }
 
-.overture-layer-style-btn {
+.overture-layer-style-btn,
+.overture-layer-export-btn {
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
@@ -474,12 +486,14 @@
   justify-content: center;
 }
 
-.overture-layer-style-btn svg {
+.overture-layer-style-btn svg,
+.overture-layer-export-btn svg {
   stroke: currentColor;
   fill: none;
 }
 
-.overture-layer-style-btn:hover {
+.overture-layer-style-btn:hover,
+.overture-layer-export-btn:hover:not(:disabled) {
   background: var(--ovt-hover);
   color: var(--ovt-text);
 }
@@ -488,7 +502,13 @@
   color: var(--ovt-accent);
 }
 
-.overture-layer-style-btn:focus-visible {
+.overture-layer-export-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.overture-layer-style-btn:focus-visible,
+.overture-layer-export-btn:focus-visible {
   outline: 2px solid var(--ovt-accent);
   outline-offset: 1px;
 }

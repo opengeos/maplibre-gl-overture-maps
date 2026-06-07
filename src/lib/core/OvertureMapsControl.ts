@@ -1,4 +1,5 @@
 import type { IControl, Map as MapLibreMap, MapMouseEvent, Popup } from 'maplibre-gl';
+import type { FeatureCollection } from 'geojson';
 import { getMapLibre } from './maplibre';
 import type {
   OvertureMapsControlOptions,
@@ -49,6 +50,7 @@ const DEFAULT_OPTIONS: Required<
   releasesUrl: DEFAULT_RELEASES_URL,
   tilesBaseUrl: DEFAULT_TILES_BASE_URL,
   inspect: true,
+  exportMinZoom: 12,
   visibleThemes: ['buildings', 'transportation', 'places'],
   themeColors: undefined,
   themeOpacity: undefined,
@@ -94,6 +96,8 @@ export class OvertureMapsControl implements IControl {
   private _popup?: Popup;
   private _releaseSelect?: HTMLSelectElement;
   private _errorEl?: HTMLElement;
+  private _noticeEl?: HTMLElement;
+  private _noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private _inspectCheckbox?: HTMLInputElement;
 
   // Panel positioning handlers
@@ -198,6 +202,12 @@ export class OvertureMapsControl implements IControl {
     // Remove map interaction handlers
     this._teardownInspect();
 
+    // Clear any pending notice timer
+    if (this._noticeTimer != null) {
+      clearTimeout(this._noticeTimer);
+      this._noticeTimer = null;
+    }
+
     // Remove Overture layers and sources
     this._removeAllThemes();
 
@@ -237,6 +247,7 @@ export class OvertureMapsControl implements IControl {
     this._panel = undefined;
     this._releaseSelect = undefined;
     this._errorEl = undefined;
+    this._noticeEl = undefined;
     this._inspectCheckbox = undefined;
     this._eventHandlers.clear();
   }
@@ -578,6 +589,131 @@ export class OvertureMapsControl implements IControl {
       this._inspectCheckbox.checked = enabled;
     }
     this._emit('statechange');
+  }
+
+  /**
+   * Collects the features of a layer rendered in the current map view as a
+   * GeoJSON FeatureCollection.
+   *
+   * Only features painted in the current viewport are returned, deduplicated
+   * across tile boundaries. Combine with a high zoom level to keep the
+   * result limited to a small area.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @returns A GeoJSON FeatureCollection (possibly empty)
+   */
+  getRenderedLayerGeoJSON(
+    theme: OvertureTheme,
+    sourceLayer: string
+  ): FeatureCollection {
+    const collection: FeatureCollection = { type: 'FeatureCollection', features: [] };
+    if (!this._map) {
+      return collection;
+    }
+    const layerIds = layerIdsForSourceLayer(theme, sourceLayer).filter((id) =>
+      this._map!.getLayer(id)
+    );
+    if (!layerIds.length) {
+      return collection;
+    }
+
+    const seen = new Set<string>();
+    for (const feature of this._map.queryRenderedFeatures({ layers: layerIds })) {
+      const key =
+        feature.id != null
+          ? `${feature.sourceLayer ?? ''}:${feature.id}`
+          : JSON.stringify([feature.geometry, feature.properties]);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      collection.features.push({
+        type: 'Feature',
+        geometry: feature.geometry,
+        properties: feature.properties ?? {},
+      });
+    }
+    return collection;
+  }
+
+  /**
+   * Exports a layer's features in the current view to a downloaded GeoJSON
+   * file. The export is gated by `exportMinZoom` so it only ever covers a
+   * small area.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @returns The exported FeatureCollection, or null when nothing was exported
+   */
+  exportLayer(theme: OvertureTheme, sourceLayer: string): FeatureCollection | null {
+    if (!this._map) {
+      return null;
+    }
+    const label = this._humanizeLayer(sourceLayer);
+    const layerState = this._state.themes[theme]?.layers[sourceLayer];
+    if (!layerState?.visible) {
+      this._notify(`Enable ${label} before exporting.`);
+      return null;
+    }
+    if (this._map.getZoom() < this._options.exportMinZoom) {
+      this._notify(`Zoom in (level ${this._options.exportMinZoom}+) to export ${label}.`);
+      return null;
+    }
+
+    const collection = this.getRenderedLayerGeoJSON(theme, sourceLayer);
+    if (!collection.features.length) {
+      this._notify(`No ${label} features in the current view.`);
+      return null;
+    }
+
+    this._downloadGeoJSON(`overture-${theme}-${sourceLayer}.geojson`, collection);
+    const count = collection.features.length;
+    this._notify(`Exported ${count} ${label} feature${count === 1 ? '' : 's'}.`);
+    return collection;
+  }
+
+  /**
+   * Triggers a browser download of a GeoJSON object.
+   *
+   * @param filename - The download file name
+   * @param data - The GeoJSON object to serialize
+   */
+  private _downloadGeoJSON(filename: string, data: FeatureCollection): void {
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/geo+json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Shows a transient notice message in the panel.
+   *
+   * @param message - The message to display
+   */
+  private _notify(message: string): void {
+    if (!this._noticeEl) {
+      return;
+    }
+    this._noticeEl.textContent = message;
+    this._noticeEl.style.display = message ? 'block' : 'none';
+    if (this._noticeTimer != null) {
+      clearTimeout(this._noticeTimer);
+      this._noticeTimer = null;
+    }
+    if (message) {
+      this._noticeTimer = setTimeout(() => {
+        if (this._noticeEl) {
+          this._noticeEl.style.display = 'none';
+        }
+        this._noticeTimer = null;
+      }, 5000);
+    }
   }
 
   /**
@@ -1038,6 +1174,11 @@ export class OvertureMapsControl implements IControl {
     this._errorEl.style.display = 'none';
     content.appendChild(this._errorEl);
 
+    this._noticeEl = document.createElement('div');
+    this._noticeEl.className = 'overture-control-notice';
+    this._noticeEl.style.display = 'none';
+    content.appendChild(this._noticeEl);
+
     const themeList = document.createElement('div');
     themeList.className = 'overture-control-themes';
     for (const theme of THEME_IDS) {
@@ -1271,8 +1412,26 @@ export class OvertureMapsControl implements IControl {
       styleBtn.setAttribute('aria-expanded', String(open));
     });
 
+    const exportBtn = document.createElement('button');
+    exportBtn.type = 'button';
+    exportBtn.className = 'overture-layer-export-btn';
+    exportBtn.setAttribute('aria-label', `Export ${label} in view to GeoJSON`);
+    exportBtn.title = 'Export features in view to GeoJSON';
+    exportBtn.disabled = !layerState.visible;
+    exportBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    `;
+    exportBtn.addEventListener('click', () => {
+      this.exportLayer(theme, sourceLayer);
+    });
+
     head.appendChild(toggle);
     head.appendChild(styleBtn);
+    head.appendChild(exportBtn);
 
     row.appendChild(head);
     row.appendChild(this._createLayerEditor(theme, sourceLayer));
@@ -1427,8 +1586,12 @@ export class OvertureMapsControl implements IControl {
     const colorInput = row.querySelector<HTMLInputElement>('.overture-layer-color');
     const sizeInput = row.querySelector<HTMLInputElement>('.overture-layer-size');
     const opacityInput = row.querySelector<HTMLInputElement>('.overture-layer-opacity');
+    const exportBtn = row.querySelector<HTMLButtonElement>('.overture-layer-export-btn');
     if (checkbox) {
       checkbox.checked = layerState.visible;
+    }
+    if (exportBtn) {
+      exportBtn.disabled = !layerState.visible;
     }
     if (swatch) {
       swatch.style.backgroundColor = layerState.color;

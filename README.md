@@ -12,6 +12,7 @@ A [MapLibre GL JS](https://maplibre.org/) plugin for visualizing [Overture Maps]
 - **All six Overture themes** - Addresses, base, buildings, divisions, places, and transportation, each loaded from the official Overture PMTiles distribution
 - **Dynamic releases** - Fetches the latest [Overture release list](https://labs.overturemaps.org/data/releases.json) at runtime, with a dropdown to switch releases and an option to pin one
 - **Per-layer styling** - Expand a theme to toggle each source layer individually; a style button opens an inline editor for the layer's color, size (point radius / line width), and opacity
+- **GeoJSON export** - A download button on each layer exports the features rendered in the current map view to a GeoJSON file. Gated by a minimum zoom (`exportMinZoom`) so exports stay limited to a small area
 - **Feature inspection** - Click any rendered Overture feature to see its properties in a popup; toggle the picker on or off from the panel
 - **Resizable panel** - Drag the panel edge to resize its width; the handle adapts to whichever corner the control sits in
 - **Dark and light mode** - The control UI follows `prefers-color-scheme` by default and can be forced light or dark
@@ -136,6 +137,7 @@ The main control class implementing MapLibre's `IControl` interface.
 | `releasesUrl`   | `string`                      | Overture labs releases.json                   | Endpoint listing available releases                                       |
 | `tilesBaseUrl`  | `string`                      | Official Overture S3 tiles URL                | Base URL of the PMTiles distribution                                      |
 | `inspect`       | `boolean`                     | `true`                                        | Click a rendered feature to open a properties popup                       |
+| `exportMinZoom` | `number`                      | `12`                                          | Minimum zoom required to export a layer to GeoJSON (keeps exports small)  |
 | `visibleThemes` | `OvertureTheme[]`             | `['buildings', 'transportation', 'places']`   | Themes that start visible                                                 |
 | `themeColors`   | `Partial<Record<OvertureTheme, string>>` | x-ray palette                       | Per-theme color overrides                                                 |
 | `themeOpacity`  | `Partial<Record<OvertureTheme, number>>` | `0.8`                               | Per-theme initial opacity (0..1)                                          |
@@ -153,6 +155,8 @@ The main control class implementing MapLibre's `IControl` interface.
 - `setLayerColor(theme, sourceLayer, color)` - Set a single layer's color
 - `setLayerSize(theme, sourceLayer, size)` - Set a single layer's size (point radius / line width)
 - `setInspect(enabled)` - Enable or disable the feature inspection picker
+- `exportLayer(theme, sourceLayer)` - Download the layer's in-view features as GeoJSON (gated by `exportMinZoom`); returns the FeatureCollection or null
+- `getRenderedLayerGeoJSON(theme, sourceLayer)` - Get the layer's in-view features as a GeoJSON FeatureCollection without downloading
 - `refreshReleases()` - Re-fetch the release list
 - `on(event, handler)` / `off(event, handler)` - Manage event handlers
 - `getMap()` / `getContainer()` - Access the map and container
