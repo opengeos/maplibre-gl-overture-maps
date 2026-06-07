@@ -101,6 +101,8 @@ export interface OvertureLayerState {
   opacity: number;
   /** Layer color (hex) */
   color: string;
+  /** Layer size: circle radius for points, line width for lines and outlines */
+  size: number;
 }
 
 /**

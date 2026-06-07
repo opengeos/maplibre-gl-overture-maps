@@ -16,6 +16,8 @@ export {
   tileUrlForTheme,
   opacityPropertyForLayerType,
   colorPropertyForLayerType,
+  sizePropertyForLayerType,
+  defaultSizeForGeometry,
 } from './lib/core/themes';
 
 // Releases helpers

@@ -10,6 +10,8 @@ import {
   tileUrlForTheme,
   opacityPropertyForLayerType,
   colorPropertyForLayerType,
+  sizePropertyForLayerType,
+  defaultSizeForGeometry,
   effectiveOpacity,
   FILL_OPACITY_RATIO,
 } from '../src/lib/core/themes';
@@ -159,6 +161,45 @@ describe('colorPropertyForLayerType', () => {
     expect(colorPropertyForLayerType('fill')).toBe('fill-color');
     expect(colorPropertyForLayerType('line')).toBe('line-color');
     expect(colorPropertyForLayerType('circle')).toBe('circle-color');
+  });
+});
+
+describe('sizePropertyForLayerType', () => {
+  it('maps circle and line to their size property and fill to null', () => {
+    expect(sizePropertyForLayerType('circle')).toBe('circle-radius');
+    expect(sizePropertyForLayerType('line')).toBe('line-width');
+    expect(sizePropertyForLayerType('fill')).toBeNull();
+  });
+});
+
+describe('defaultSizeForGeometry', () => {
+  it('returns geometry-appropriate defaults', () => {
+    expect(defaultSizeForGeometry('point')).toBe(3);
+    expect(defaultSizeForGeometry('line')).toBe(1);
+    expect(defaultSizeForGeometry('polygon')).toBe(0.8);
+  });
+});
+
+describe('buildSourceLayerSpecs size override', () => {
+  it('applies a custom circle radius for points', () => {
+    const [circle] = buildSourceLayerSpecs('places', 'place', 1, undefined, 7);
+    expect((circle.paint as Record<string, unknown>)['circle-radius']).toBe(7);
+  });
+
+  it('applies a custom line width for lines', () => {
+    const [line] = buildSourceLayerSpecs('transportation', 'segment', 1, undefined, 4);
+    expect((line.paint as Record<string, unknown>)['line-width']).toBe(4);
+  });
+
+  it('applies a custom outline width for polygons', () => {
+    const specs = buildSourceLayerSpecs('buildings', 'building', 1, undefined, 2.5);
+    const outline = specs.find((s) => s.type === 'line');
+    expect((outline!.paint as Record<string, unknown>)['line-width']).toBe(2.5);
+  });
+
+  it('falls back to the geometry default size', () => {
+    const [circle] = buildSourceLayerSpecs('places', 'place', 1);
+    expect((circle.paint as Record<string, unknown>)['circle-radius']).toBe(3);
   });
 });
 

@@ -11,7 +11,7 @@ A [MapLibre GL JS](https://maplibre.org/) plugin for visualizing [Overture Maps]
 
 - **All six Overture themes** - Addresses, base, buildings, divisions, places, and transportation, each loaded from the official Overture PMTiles distribution
 - **Dynamic releases** - Fetches the latest [Overture release list](https://labs.overturemaps.org/data/releases.json) at runtime, with a dropdown to switch releases and an option to pin one
-- **Per-layer styling** - Expand a theme to toggle each source layer individually and change its color and opacity
+- **Per-layer styling** - Expand a theme to toggle each source layer individually; a style button opens an inline editor for the layer's color, size (point radius / line width), and opacity
 - **Feature inspection** - Click any rendered Overture feature to see its properties in a popup; toggle the picker on or off from the panel
 - **Resizable panel** - Drag the panel edge to resize its width; the handle adapts to whichever corner the control sits in
 - **Dark and light mode** - The control UI follows `prefers-color-scheme` by default and can be forced light or dark
@@ -151,6 +151,7 @@ The main control class implementing MapLibre's `IControl` interface.
 - `setLayerVisible(theme, sourceLayer, visible)` - Show or hide a single source layer
 - `setLayerOpacity(theme, sourceLayer, opacity)` - Set a single layer's opacity (0..1)
 - `setLayerColor(theme, sourceLayer, color)` - Set a single layer's color
+- `setLayerSize(theme, sourceLayer, size)` - Set a single layer's size (point radius / line width)
 - `setInspect(enabled)` - Enable or disable the feature inspection picker
 - `refreshReleases()` - Re-fetch the release list
 - `on(event, handler)` / `off(event, handler)` - Manage event handlers

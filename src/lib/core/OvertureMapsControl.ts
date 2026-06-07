@@ -16,6 +16,9 @@ import {
   buildSourceLayerSpecs,
   opacityPropertyForLayerType,
   colorPropertyForLayerType,
+  sizePropertyForLayerType,
+  defaultSizeForGeometry,
+  findLayerDef,
   effectiveOpacity,
   sourceIdForTheme,
   tileUrlForTheme,
@@ -125,7 +128,12 @@ export class OvertureMapsControl implements IControl {
       const color = this._options.themeColors?.[theme] ?? def.color;
       const layers = {} as Record<string, OvertureLayerState>;
       for (const layer of def.layers) {
-        layers[layer.sourceLayer] = { visible, opacity, color };
+        layers[layer.sourceLayer] = {
+          visible,
+          opacity,
+          color,
+          size: defaultSizeForGeometry(layer.geometry),
+        };
       }
       themes[theme] = { expanded: false, layers };
     }
@@ -497,6 +505,45 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
+   * Sets the size of a single source layer (circle radius for points, line
+   * width for lines and polygon outlines).
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @param size - The size in pixels
+   */
+  setLayerSize(theme: OvertureTheme, sourceLayer: string, size: number): void {
+    const layerState = this._state.themes[theme]?.layers[sourceLayer];
+    if (!layerState) {
+      return;
+    }
+    const clamped = Math.max(0, size);
+    layerState.size = clamped;
+
+    if (this._map && layerState.visible) {
+      for (const spec of buildSourceLayerSpecs(
+        theme,
+        sourceLayer,
+        layerState.opacity,
+        layerState.color,
+        clamped
+      )) {
+        if (this._map.getLayer(spec.id)) {
+          const layerType = spec.type as 'fill' | 'line' | 'circle';
+          const property = sizePropertyForLayerType(layerType);
+          if (property) {
+            this._map.setPaintProperty(spec.id, property, clamped);
+          }
+        }
+      }
+    }
+
+    this._syncLayerRow(theme, sourceLayer);
+    this._emit('themechange');
+    this._emit('statechange');
+  }
+
+  /**
    * Expands or collapses a theme's layer list in the panel.
    *
    * @param theme - The theme to update
@@ -670,7 +717,8 @@ export class OvertureMapsControl implements IControl {
       theme,
       sourceLayer,
       layerState.opacity,
-      layerState.color
+      layerState.color,
+      layerState.size
     )) {
       if (!this._map.getLayer(spec.id)) {
         // Insert at the position that keeps the THEME_IDS draw order
@@ -1163,8 +1211,9 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
-   * Creates a panel row for one source layer: checkbox, color picker, label,
-   * and opacity slider.
+   * Creates a panel row for one source layer: a checkbox, color swatch,
+   * label, and a style button that reveals an inline editor for color,
+   * size, and opacity.
    *
    * @param theme - The theme the layer belongs to
    * @param sourceLayer - The source-layer name
@@ -1172,13 +1221,17 @@ export class OvertureMapsControl implements IControl {
    */
   private _createLayerRow(theme: OvertureTheme, sourceLayer: string): HTMLElement {
     const layerState = this._state.themes[theme].layers[sourceLayer];
+    const label = this._humanizeLayer(sourceLayer);
 
     const row = document.createElement('div');
     row.className = 'overture-layer-row';
     row.dataset.layer = sourceLayer;
 
-    const top = document.createElement('label');
-    top.className = 'overture-layer-toggle';
+    const head = document.createElement('div');
+    head.className = 'overture-layer-head';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'overture-layer-toggle';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -1188,39 +1241,120 @@ export class OvertureMapsControl implements IControl {
       this.setLayerVisible(theme, sourceLayer, checkbox.checked);
     });
 
+    const swatch = document.createElement('span');
+    swatch.className = 'overture-layer-swatch';
+    swatch.style.backgroundColor = layerState.color;
+
+    const name = document.createElement('span');
+    name.className = 'overture-layer-name';
+    name.textContent = label;
+
+    toggle.appendChild(checkbox);
+    toggle.appendChild(swatch);
+    toggle.appendChild(name);
+
+    const styleBtn = document.createElement('button');
+    styleBtn.type = 'button';
+    styleBtn.className = 'overture-layer-style-btn';
+    styleBtn.setAttribute('aria-label', `Edit ${label} style`);
+    styleBtn.setAttribute('aria-expanded', 'false');
+    styleBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="8" x2="20" y2="8"/>
+        <circle cx="9" cy="8" r="2"/>
+        <line x1="4" y1="16" x2="20" y2="16"/>
+        <circle cx="15" cy="16" r="2"/>
+      </svg>
+    `;
+    styleBtn.addEventListener('click', () => {
+      const open = row.classList.toggle('editing');
+      styleBtn.setAttribute('aria-expanded', String(open));
+    });
+
+    head.appendChild(toggle);
+    head.appendChild(styleBtn);
+
+    row.appendChild(head);
+    row.appendChild(this._createLayerEditor(theme, sourceLayer));
+    return row;
+  }
+
+  /**
+   * Creates the inline style editor for a layer (color, size, opacity).
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @returns The editor element
+   */
+  private _createLayerEditor(theme: OvertureTheme, sourceLayer: string): HTMLElement {
+    const layerState = this._state.themes[theme].layers[sourceLayer];
+    const label = this._humanizeLayer(sourceLayer);
+    const geometry = findLayerDef(theme, sourceLayer)?.geometry ?? 'point';
+    const isPoint = geometry === 'point';
+
+    const editor = document.createElement('div');
+    editor.className = 'overture-layer-editor';
+
+    // Color
+    const colorRow = document.createElement('label');
+    colorRow.className = 'overture-style-field';
+    const colorName = document.createElement('span');
+    colorName.textContent = 'Color';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.className = 'overture-layer-color';
     colorInput.value = layerState.color;
-    colorInput.setAttribute('aria-label', `${this._humanizeLayer(sourceLayer)} color`);
+    colorInput.setAttribute('aria-label', `${label} color`);
     colorInput.addEventListener('input', () => {
       this.setLayerColor(theme, sourceLayer, colorInput.value);
     });
+    colorRow.appendChild(colorName);
+    colorRow.appendChild(colorInput);
 
-    const name = document.createElement('span');
-    name.className = 'overture-layer-name';
-    name.textContent = this._humanizeLayer(sourceLayer);
-
-    top.appendChild(checkbox);
-    top.appendChild(colorInput);
-    top.appendChild(name);
-
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.className = 'overture-layer-opacity';
-    slider.min = '0';
-    slider.max = '1';
-    slider.step = '0.05';
-    slider.value = String(layerState.opacity);
-    slider.disabled = !layerState.visible;
-    slider.setAttribute('aria-label', `${this._humanizeLayer(sourceLayer)} opacity`);
-    slider.addEventListener('input', () => {
-      this.setLayerOpacity(theme, sourceLayer, Number(slider.value));
+    // Size (circle radius for points, line width otherwise)
+    const sizeRow = document.createElement('label');
+    sizeRow.className = 'overture-style-field';
+    const sizeName = document.createElement('span');
+    sizeName.textContent = isPoint ? 'Radius' : 'Width';
+    const sizeInput = document.createElement('input');
+    sizeInput.type = 'range';
+    sizeInput.className = 'overture-layer-size';
+    sizeInput.min = isPoint ? '1' : '0.5';
+    sizeInput.max = isPoint ? '12' : '6';
+    sizeInput.step = '0.5';
+    sizeInput.value = String(layerState.size);
+    sizeInput.disabled = !layerState.visible;
+    sizeInput.setAttribute('aria-label', `${label} ${isPoint ? 'radius' : 'width'}`);
+    sizeInput.addEventListener('input', () => {
+      this.setLayerSize(theme, sourceLayer, Number(sizeInput.value));
     });
+    sizeRow.appendChild(sizeName);
+    sizeRow.appendChild(sizeInput);
 
-    row.appendChild(top);
-    row.appendChild(slider);
-    return row;
+    // Opacity
+    const opacityRow = document.createElement('label');
+    opacityRow.className = 'overture-style-field';
+    const opacityName = document.createElement('span');
+    opacityName.textContent = 'Opacity';
+    const opacityInput = document.createElement('input');
+    opacityInput.type = 'range';
+    opacityInput.className = 'overture-layer-opacity';
+    opacityInput.min = '0';
+    opacityInput.max = '1';
+    opacityInput.step = '0.05';
+    opacityInput.value = String(layerState.opacity);
+    opacityInput.disabled = !layerState.visible;
+    opacityInput.setAttribute('aria-label', `${label} opacity`);
+    opacityInput.addEventListener('input', () => {
+      this.setLayerOpacity(theme, sourceLayer, Number(opacityInput.value));
+    });
+    opacityRow.appendChild(opacityName);
+    opacityRow.appendChild(opacityInput);
+
+    editor.appendChild(colorRow);
+    editor.appendChild(sizeRow);
+    editor.appendChild(opacityRow);
+    return editor;
   }
 
   /**
@@ -1289,17 +1423,26 @@ export class OvertureMapsControl implements IControl {
     }
     const layerState = this._state.themes[theme].layers[sourceLayer];
     const checkbox = row.querySelector<HTMLInputElement>('.overture-layer-checkbox');
+    const swatch = row.querySelector<HTMLElement>('.overture-layer-swatch');
     const colorInput = row.querySelector<HTMLInputElement>('.overture-layer-color');
-    const slider = row.querySelector<HTMLInputElement>('.overture-layer-opacity');
+    const sizeInput = row.querySelector<HTMLInputElement>('.overture-layer-size');
+    const opacityInput = row.querySelector<HTMLInputElement>('.overture-layer-opacity');
     if (checkbox) {
       checkbox.checked = layerState.visible;
+    }
+    if (swatch) {
+      swatch.style.backgroundColor = layerState.color;
     }
     if (colorInput) {
       colorInput.value = layerState.color;
     }
-    if (slider) {
-      slider.value = String(layerState.opacity);
-      slider.disabled = !layerState.visible;
+    if (sizeInput) {
+      sizeInput.value = String(layerState.size);
+      sizeInput.disabled = !layerState.visible;
+    }
+    if (opacityInput) {
+      opacityInput.value = String(layerState.opacity);
+      opacityInput.disabled = !layerState.visible;
     }
   }
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { OvertureMapsState, OvertureThemeState, OvertureLayerState } from '../core/types';
-import { THEMES, THEME_IDS } from '../core/themes';
+import { THEMES, THEME_IDS, defaultSizeForGeometry } from '../core/themes';
 import type { OvertureTheme } from '../core/themes';
 
 /**
@@ -15,7 +15,12 @@ function defaultThemes(): Record<OvertureTheme, OvertureThemeState> {
     const visible = ['buildings', 'transportation', 'places'].includes(theme);
     const layers = {} as Record<string, OvertureLayerState>;
     for (const layer of def.layers) {
-      layers[layer.sourceLayer] = { visible, opacity: 0.8, color: def.color };
+      layers[layer.sourceLayer] = {
+        visible,
+        opacity: 0.8,
+        color: def.color,
+        size: defaultSizeForGeometry(layer.geometry),
+      };
     }
     themes[theme] = { expanded: false, layers };
   }

@@ -412,7 +412,7 @@
 .overture-layer-row {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   padding: 3px 4px;
   border-radius: 4px;
 }
@@ -421,12 +421,20 @@
   background: var(--ovt-hover);
 }
 
+.overture-layer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .overture-layer-toggle {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   color: var(--ovt-text);
+  min-width: 0;
 }
 
 .overture-layer-checkbox {
@@ -435,10 +443,96 @@
   cursor: pointer;
 }
 
+.overture-layer-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.overture-layer-name {
+  flex: 1 1 auto;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overture-layer-style-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ovt-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overture-layer-style-btn svg {
+  stroke: currentColor;
+  fill: none;
+}
+
+.overture-layer-style-btn:hover {
+  background: var(--ovt-hover);
+  color: var(--ovt-text);
+}
+
+.overture-layer-row.editing .overture-layer-style-btn {
+  color: var(--ovt-accent);
+}
+
+.overture-layer-style-btn:focus-visible {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 1px;
+}
+
+/* Inline per-layer style editor (shown when the row is editing) */
+.overture-layer-editor {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 4px 6px 24px;
+}
+
+.overture-layer-row.editing .overture-layer-editor {
+  display: flex;
+}
+
+.overture-style-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ovt-muted);
+  font-size: 11px;
+}
+
+.overture-style-field > span {
+  flex: 0 0 48px;
+}
+
+.overture-style-field input[type='range'] {
+  flex: 1 1 auto;
+  margin: 0;
+  accent-color: var(--ovt-accent);
+  cursor: pointer;
+}
+
+.overture-style-field input[type='range']:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .overture-layer-color {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: 28px;
+  height: 18px;
   padding: 0;
   border: none;
   border-radius: 3px;
@@ -458,23 +552,6 @@
 .overture-layer-color::-moz-color-swatch {
   border: 1px solid var(--ovt-border);
   border-radius: 3px;
-}
-
-.overture-layer-name {
-  flex: 1 1 auto;
-  font-size: 12px;
-}
-
-.overture-layer-opacity {
-  width: 100%;
-  margin: 0;
-  accent-color: var(--ovt-accent);
-  cursor: pointer;
-}
-
-.overture-layer-opacity:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 /* Hint text */

@@ -182,6 +182,34 @@ export function colorPropertyForLayerType(
 }
 
 /**
+ * Returns the size paint property name for a layer type.
+ *
+ * Fill layers have no size dimension and return null.
+ *
+ * @param layerType - The MapLibre layer type
+ * @returns The matching paint property, or null for fills
+ */
+export function sizePropertyForLayerType(
+  layerType: 'fill' | 'line' | 'circle'
+): 'circle-radius' | 'line-width' | null {
+  if (layerType === 'circle') return 'circle-radius';
+  if (layerType === 'line') return 'line-width';
+  return null;
+}
+
+/**
+ * Returns the default size (circle radius or line width) for a geometry.
+ *
+ * @param geometry - The source-layer geometry
+ * @returns The default size in pixels
+ */
+export function defaultSizeForGeometry(geometry: OvertureGeometry): number {
+  if (geometry === 'point') return 3;
+  if (geometry === 'line') return 1;
+  return 0.8;
+}
+
+/**
  * Finds the source-layer definition for a theme.
  *
  * @param theme - The Overture theme identifier
@@ -239,19 +267,28 @@ export function buildLayerSpecs(
  * @param sourceLayer - The source-layer name (e.g. `water`)
  * @param opacity - The layer opacity (0..1)
  * @param color - Optional color override (defaults to the theme x-ray color)
+ * @param size - Optional size override (circle radius / line width); defaults
+ *   to the geometry's default size
  * @returns Layer specifications ready for `map.addLayer`
  */
 export function buildSourceLayerSpecs(
   theme: OvertureTheme,
   sourceLayer: string,
   opacity: number,
-  color?: string
+  color?: string,
+  size?: number
 ): LayerSpecification[] {
   const layer = findLayerDef(theme, sourceLayer);
   if (!layer) {
     return [];
   }
-  return specsForLayer(sourceIdForTheme(theme), layer, opacity, color ?? THEMES[theme].color);
+  return specsForLayer(
+    sourceIdForTheme(theme),
+    layer,
+    opacity,
+    color ?? THEMES[theme].color,
+    size
+  );
 }
 
 /**
@@ -278,9 +315,11 @@ function specsForLayer(
   sourceId: string,
   layer: OvertureLayerDef,
   opacity: number,
-  color: string
+  color: string,
+  size?: number
 ): LayerSpecification[] {
   const idBase = `${sourceId}-${layer.sourceLayer}`;
+  const px = size ?? defaultSizeForGeometry(layer.geometry);
 
   if (layer.geometry === 'polygon') {
     return [
@@ -301,7 +340,7 @@ function specsForLayer(
         'source-layer': layer.sourceLayer,
         paint: {
           'line-color': color,
-          'line-width': 0.8,
+          'line-width': px,
           'line-opacity': effectiveOpacity('line', opacity),
         },
       },
@@ -317,7 +356,7 @@ function specsForLayer(
         'source-layer': layer.sourceLayer,
         paint: {
           'line-color': color,
-          'line-width': 1,
+          'line-width': px,
           'line-opacity': effectiveOpacity('line', opacity),
         },
       },
@@ -332,7 +371,7 @@ function specsForLayer(
       'source-layer': layer.sourceLayer,
       paint: {
         'circle-color': color,
-        'circle-radius': 3,
+        'circle-radius': px,
         'circle-opacity': effectiveOpacity('circle', opacity),
         'circle-stroke-width': 0.5,
         'circle-stroke-color': '#ffffff',
