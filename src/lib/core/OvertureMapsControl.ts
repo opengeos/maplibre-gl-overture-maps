@@ -100,6 +100,10 @@ export class OvertureMapsControl implements IControl {
   private _noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private _inspectCheckbox?: HTMLInputElement;
 
+  // System color-scheme adaptation (only used when theme: 'auto')
+  private _schemeMedia: MediaQueryList | null = null;
+  private _schemeListener: (() => void) | null = null;
+
   // Panel positioning handlers
   private _resizeHandler: (() => void) | null = null;
   private _mapResizeHandler: (() => void) | null = null;
@@ -174,6 +178,9 @@ export class OvertureMapsControl implements IControl {
     // Setup event listeners for panel positioning and click-outside
     this._setupEventListeners();
 
+    // Follow the system color scheme live when theme is 'auto'
+    this._setupSchemeListener();
+
     // Setup feature inspection
     if (this._state.inspect) {
       this._setupInspect();
@@ -207,6 +214,13 @@ export class OvertureMapsControl implements IControl {
       clearTimeout(this._noticeTimer);
       this._noticeTimer = null;
     }
+
+    // Remove the system color-scheme listener
+    if (this._schemeMedia && this._schemeListener) {
+      this._schemeMedia.removeEventListener('change', this._schemeListener);
+    }
+    this._schemeMedia = null;
+    this._schemeListener = null;
 
     // Remove Overture layers and sources
     this._removeAllThemes();
@@ -1092,12 +1106,62 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
-   * Returns the forced color-scheme class suffix for the configured theme.
+   * Returns whether the system currently prefers a dark color scheme.
+   */
+  private _prefersDark(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
+  }
+
+  /**
+   * Resolves the active color scheme. In `auto` mode this follows the
+   * system `prefers-color-scheme`.
+   *
+   * @returns The resolved scheme
+   */
+  private _resolvedScheme(): 'light' | 'dark' {
+    if (this._options.theme === 'light') return 'light';
+    if (this._options.theme === 'dark') return 'dark';
+    return this._prefersDark() ? 'dark' : 'light';
+  }
+
+  /**
+   * Returns the color-scheme class suffix for the resolved scheme.
    */
   private _schemeClass(): string {
-    if (this._options.theme === 'light') return ' ovt-theme-light';
-    if (this._options.theme === 'dark') return ' ovt-theme-dark';
-    return '';
+    return ` ovt-theme-${this._resolvedScheme()}`;
+  }
+
+  /**
+   * Applies the resolved color-scheme class to the container and panel.
+   * Called on creation and whenever the system theme changes in `auto` mode.
+   */
+  private _applyScheme(): void {
+    const cls = `ovt-theme-${this._resolvedScheme()}`;
+    for (const el of [this._container, this._panel]) {
+      el?.classList.remove('ovt-theme-light', 'ovt-theme-dark');
+      el?.classList.add(cls);
+    }
+  }
+
+  /**
+   * Subscribes to system color-scheme changes so the control adapts live
+   * when `theme` is `auto`.
+   */
+  private _setupSchemeListener(): void {
+    if (
+      this._options.theme !== 'auto' ||
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) {
+      return;
+    }
+    this._schemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+    this._schemeListener = () => this._applyScheme();
+    this._schemeMedia.addEventListener('change', this._schemeListener);
   }
 
   /**
