@@ -120,6 +120,10 @@ export class OvertureMapsControl implements IControl {
   private _clickHandler: ((e: MapMouseEvent) => void) | null = null;
   private _moveHandler: ((e: MapMouseEvent) => void) | null = null;
 
+  // Re-applies the Overture sources and layers after a basemap/style reload,
+  // which drops every non-base layer from the map.
+  private _styleLoadHandler: (() => void) | null = null;
+
   /**
    * Creates a new OvertureMapsControl instance.
    *
@@ -177,6 +181,14 @@ export class OvertureMapsControl implements IControl {
 
     // Setup event listeners for panel positioning and click-outside
     this._setupEventListeners();
+
+    // Re-add the Overture sources and layers whenever a new basemap style
+    // finishes loading. Switching basemaps calls map.setStyle(), which wipes
+    // every non-base source and layer, so without this the visible themes
+    // would silently disappear after a basemap change. _applyRelease() is a
+    // no-op until a release has resolved, so the initial load is unaffected.
+    this._styleLoadHandler = () => this._applyRelease();
+    this._map.on('style.load', this._styleLoadHandler);
 
     // Follow the system color scheme live when theme is 'auto'
     this._setupSchemeListener();
@@ -243,6 +255,10 @@ export class OvertureMapsControl implements IControl {
     if (this._mapResizeHandler && this._map) {
       this._map.off('resize', this._mapResizeHandler);
       this._mapResizeHandler = null;
+    }
+    if (this._styleLoadHandler && this._map) {
+      this._map.off('style.load', this._styleLoadHandler);
+      this._styleLoadHandler = null;
     }
     if (this._clickOutsideHandler) {
       document.removeEventListener('click', this._clickOutsideHandler);

@@ -1,7 +1,7 @@
 {
   "id": "maplibre-gl-overture-maps",
   "name": "MapLibre GL Overture Maps",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entry": "dist/index.js",
   "description": "Visualize Overture Maps PMTiles themes with a MapLibre control.",
   "style": "dist/style.css"
