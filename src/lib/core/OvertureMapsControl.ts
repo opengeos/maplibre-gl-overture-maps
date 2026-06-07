@@ -673,9 +673,49 @@ export class OvertureMapsControl implements IControl {
       layerState.color
     )) {
       if (!this._map.getLayer(spec.id)) {
-        this._map.addLayer(spec);
+        // Insert at the position that keeps the THEME_IDS draw order
+        // (first theme on top), regardless of the order layers are toggled.
+        this._map.addLayer(spec, this._beforeIdFor(spec.id));
       }
     }
+  }
+
+  /**
+   * The canonical back-to-front order of every Overture layer id.
+   *
+   * Themes are drawn back to front in reverse of {@link THEME_IDS}, so the
+   * first panel theme (e.g. addresses) ends up on top of the map.
+   *
+   * @returns Layer ids from bottom-most to top-most
+   */
+  private _orderedLayerIds(): string[] {
+    const ids: string[] = [];
+    for (let i = THEME_IDS.length - 1; i >= 0; i--) {
+      ids.push(...layerIdsForTheme(THEME_IDS[i]));
+    }
+    return ids;
+  }
+
+  /**
+   * Finds the layer a new layer should be inserted before to preserve the
+   * canonical draw order.
+   *
+   * @param layerId - The id of the layer being added
+   * @returns The id of the next existing layer above it, or undefined to
+   *   append on top
+   */
+  private _beforeIdFor(layerId: string): string | undefined {
+    const order = this._orderedLayerIds();
+    const index = order.indexOf(layerId);
+    if (index < 0) {
+      return undefined;
+    }
+    for (let i = index + 1; i < order.length; i++) {
+      if (this._map?.getLayer(order[i])) {
+        return order[i];
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -896,9 +936,9 @@ export class OvertureMapsControl implements IControl {
     toggleBtn.innerHTML = `
       <span class="overture-control-icon">
         <svg viewBox="0 0 24 24" width="22" height="22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 3 21 8 12 13 3 8 12 3"/>
-          <polyline points="3 12.5 12 17.5 21 12.5"/>
-          <polyline points="3 17 12 22 21 17"/>
+          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+          <line x1="8" y1="2" x2="8" y2="18"/>
+          <line x1="16" y1="6" x2="16" y2="22"/>
         </svg>
       </span>
     `;

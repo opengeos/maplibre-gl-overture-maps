@@ -16,14 +16,14 @@ import {
 import type { OvertureTheme } from '../src/lib/core/themes';
 
 describe('THEMES', () => {
-  it('defines all six Overture themes', () => {
+  it('defines all six Overture themes in panel (top-to-bottom) order', () => {
     expect(THEME_IDS).toEqual([
       'addresses',
-      'base',
-      'buildings',
-      'divisions',
       'places',
       'transportation',
+      'buildings',
+      'divisions',
+      'base',
     ]);
   });
 

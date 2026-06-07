@@ -110,8 +110,19 @@ export const THEMES: Record<OvertureTheme, ThemeDefinition> = {
 
 /**
  * Ordered list of all Overture theme identifiers.
+ *
+ * This is the panel display order (top to bottom). The control draws the
+ * first theme on top of the map and the last theme at the bottom, so the
+ * detail themes (addresses, places) sit above the background (base).
  */
-export const THEME_IDS = Object.keys(THEMES) as OvertureTheme[];
+export const THEME_IDS: OvertureTheme[] = [
+  'addresses',
+  'places',
+  'transportation',
+  'buildings',
+  'divisions',
+  'base',
+];
 
 /**
  * Returns the map source id used for a theme.
