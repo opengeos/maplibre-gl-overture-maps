@@ -6,13 +6,16 @@ import type {
   OvertureMapsEvent,
   OvertureMapsEventHandler,
   OvertureThemeState,
+  OvertureLayerState,
 } from './types';
 import {
   THEMES,
   THEME_IDS,
-  buildLayerSpecs,
   layerIdsForTheme,
+  layerIdsForSourceLayer,
+  buildSourceLayerSpecs,
   opacityPropertyForLayerType,
+  colorPropertyForLayerType,
   effectiveOpacity,
   sourceIdForTheme,
   tileUrlForTheme,
@@ -50,6 +53,12 @@ const DEFAULT_OPTIONS: Required<
 
 const DEFAULT_OPACITY = 0.8;
 
+/** Minimum panel width when resizing, matches the CSS min-width */
+const MIN_PANEL_WIDTH = 240;
+
+/** Maximum panel width when resizing */
+const MAX_PANEL_WIDTH = 600;
+
 /**
  * Event handlers map type
  */
@@ -82,6 +91,7 @@ export class OvertureMapsControl implements IControl {
   private _popup?: Popup;
   private _releaseSelect?: HTMLSelectElement;
   private _errorEl?: HTMLElement;
+  private _inspectCheckbox?: HTMLInputElement;
 
   // Panel positioning handlers
   private _resizeHandler: (() => void) | null = null;
@@ -90,6 +100,10 @@ export class OvertureMapsControl implements IControl {
   // Set while expanding so the click that triggered a programmatic
   // expand (e.g. an external button) is not treated as a click-outside
   private _suppressClickOutside = false;
+
+  // Panel width drag-resize handlers (added to the document during a drag)
+  private _resizePointerMove: ((e: PointerEvent) => void) | null = null;
+  private _resizePointerUp: ((e: PointerEvent) => void) | null = null;
 
   // Map interaction handlers
   private _clickHandler: ((e: MapMouseEvent) => void) | null = null;
@@ -105,10 +119,15 @@ export class OvertureMapsControl implements IControl {
 
     const themes = {} as Record<OvertureTheme, OvertureThemeState>;
     for (const theme of THEME_IDS) {
-      themes[theme] = {
-        visible: this._options.visibleThemes.includes(theme),
-        opacity: this._options.themeOpacity?.[theme] ?? DEFAULT_OPACITY,
-      };
+      const def = THEMES[theme];
+      const visible = this._options.visibleThemes.includes(theme);
+      const opacity = this._options.themeOpacity?.[theme] ?? DEFAULT_OPACITY;
+      const color = this._options.themeColors?.[theme] ?? def.color;
+      const layers = {} as Record<string, OvertureLayerState>;
+      for (const layer of def.layers) {
+        layers[layer.sourceLayer] = { visible, opacity, color };
+      }
+      themes[theme] = { expanded: false, layers };
     }
 
     this._state = {
@@ -117,6 +136,7 @@ export class OvertureMapsControl implements IControl {
       release: this._options.release ?? '',
       releases: this._options.release ? [this._options.release] : [],
       themes,
+      inspect: this._options.inspect,
       error: null,
     };
   }
@@ -143,7 +163,7 @@ export class OvertureMapsControl implements IControl {
     this._setupEventListeners();
 
     // Setup feature inspection
-    if (this._options.inspect) {
+    if (this._state.inspect) {
       this._setupInspect();
     }
 
@@ -168,19 +188,20 @@ export class OvertureMapsControl implements IControl {
    */
   onRemove(): void {
     // Remove map interaction handlers
-    if (this._clickHandler && this._map) {
-      this._map.off('click', this._clickHandler);
-      this._clickHandler = null;
-    }
-    if (this._moveHandler && this._map) {
-      this._map.off('mousemove', this._moveHandler);
-      this._moveHandler = null;
-    }
-    this._popup?.remove();
-    this._popup = undefined;
+    this._teardownInspect();
 
     // Remove Overture layers and sources
     this._removeAllThemes();
+
+    // Remove any in-progress panel resize listeners
+    if (this._resizePointerMove) {
+      document.removeEventListener('pointermove', this._resizePointerMove);
+      this._resizePointerMove = null;
+    }
+    if (this._resizePointerUp) {
+      document.removeEventListener('pointerup', this._resizePointerUp);
+      this._resizePointerUp = null;
+    }
 
     // Remove event listeners
     if (this._resizeHandler) {
@@ -208,6 +229,7 @@ export class OvertureMapsControl implements IControl {
     this._panel = undefined;
     this._releaseSelect = undefined;
     this._errorEl = undefined;
+    this._inspectCheckbox = undefined;
     this._eventHandlers.clear();
   }
 
@@ -342,29 +364,40 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
-   * Shows or hides an Overture theme.
+   * Shows or hides every source layer of an Overture theme.
    *
    * @param theme - The theme to update
-   * @param visible - Whether the theme should be rendered
+   * @param visible - Whether the theme's layers should be rendered
    */
   setThemeVisible(theme: OvertureTheme, visible: boolean): void {
     const themeState = this._state.themes[theme];
-    if (!themeState || themeState.visible === visible) {
+    if (!themeState) {
       return;
     }
-    themeState.visible = visible;
-    if (visible) {
-      this._addTheme(theme);
-    } else {
-      this._removeTheme(theme);
+    let changed = false;
+    for (const sourceLayer of Object.keys(themeState.layers)) {
+      const layerState = themeState.layers[sourceLayer];
+      if (layerState.visible === visible) {
+        continue;
+      }
+      layerState.visible = visible;
+      if (visible) {
+        this._addLayer(theme, sourceLayer);
+      } else {
+        this._removeLayer(theme, sourceLayer);
+      }
+      changed = true;
     }
-    this._syncThemeRow(theme);
+    if (!changed) {
+      return;
+    }
+    this._syncThemeGroup(theme);
     this._emit('themechange');
     this._emit('statechange');
   }
 
   /**
-   * Sets the opacity of an Overture theme.
+   * Sets the opacity of every source layer of an Overture theme.
    *
    * @param theme - The theme to update
    * @param opacity - Opacity value between 0 and 1
@@ -374,11 +407,51 @@ export class OvertureMapsControl implements IControl {
     if (!themeState) {
       return;
     }
-    const clamped = Math.min(1, Math.max(0, opacity));
-    themeState.opacity = clamped;
+    for (const sourceLayer of Object.keys(themeState.layers)) {
+      this.setLayerOpacity(theme, sourceLayer, opacity);
+    }
+  }
 
-    if (this._map && themeState.visible) {
-      for (const spec of buildLayerSpecs(theme, clamped, this._options.themeColors?.[theme])) {
+  /**
+   * Shows or hides a single source layer of a theme.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @param visible - Whether the layer should be rendered
+   */
+  setLayerVisible(theme: OvertureTheme, sourceLayer: string, visible: boolean): void {
+    const layerState = this._state.themes[theme]?.layers[sourceLayer];
+    if (!layerState || layerState.visible === visible) {
+      return;
+    }
+    layerState.visible = visible;
+    if (visible) {
+      this._addLayer(theme, sourceLayer);
+    } else {
+      this._removeLayer(theme, sourceLayer);
+    }
+    this._syncThemeGroup(theme);
+    this._emit('themechange');
+    this._emit('statechange');
+  }
+
+  /**
+   * Sets the opacity of a single source layer.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @param opacity - Opacity value between 0 and 1
+   */
+  setLayerOpacity(theme: OvertureTheme, sourceLayer: string, opacity: number): void {
+    const layerState = this._state.themes[theme]?.layers[sourceLayer];
+    if (!layerState) {
+      return;
+    }
+    const clamped = Math.min(1, Math.max(0, opacity));
+    layerState.opacity = clamped;
+
+    if (this._map && layerState.visible) {
+      for (const spec of buildSourceLayerSpecs(theme, sourceLayer, clamped, layerState.color)) {
         if (this._map.getLayer(spec.id)) {
           const layerType = spec.type as 'fill' | 'line' | 'circle';
           this._map.setPaintProperty(
@@ -390,8 +463,73 @@ export class OvertureMapsControl implements IControl {
       }
     }
 
-    this._syncThemeRow(theme);
+    this._syncLayerRow(theme, sourceLayer);
     this._emit('themechange');
+    this._emit('statechange');
+  }
+
+  /**
+   * Sets the color of a single source layer.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @param color - A CSS color string (hex)
+   */
+  setLayerColor(theme: OvertureTheme, sourceLayer: string, color: string): void {
+    const layerState = this._state.themes[theme]?.layers[sourceLayer];
+    if (!layerState) {
+      return;
+    }
+    layerState.color = color;
+
+    if (this._map && layerState.visible) {
+      for (const spec of buildSourceLayerSpecs(theme, sourceLayer, layerState.opacity, color)) {
+        if (this._map.getLayer(spec.id)) {
+          const layerType = spec.type as 'fill' | 'line' | 'circle';
+          this._map.setPaintProperty(spec.id, colorPropertyForLayerType(layerType), color);
+        }
+      }
+    }
+
+    this._syncLayerRow(theme, sourceLayer);
+    this._emit('themechange');
+    this._emit('statechange');
+  }
+
+  /**
+   * Expands or collapses a theme's layer list in the panel.
+   *
+   * @param theme - The theme to update
+   * @param expanded - Whether the layer list should be shown
+   */
+  setThemeExpanded(theme: OvertureTheme, expanded: boolean): void {
+    const themeState = this._state.themes[theme];
+    if (!themeState || themeState.expanded === expanded) {
+      return;
+    }
+    themeState.expanded = expanded;
+    this._syncThemeGroup(theme);
+    this._emit('statechange');
+  }
+
+  /**
+   * Enables or disables the feature inspection picker.
+   *
+   * @param enabled - Whether clicking a feature opens a properties popup
+   */
+  setInspect(enabled: boolean): void {
+    if (this._state.inspect === enabled) {
+      return;
+    }
+    this._state.inspect = enabled;
+    if (enabled) {
+      this._setupInspect();
+    } else {
+      this._teardownInspect();
+    }
+    if (this._inspectCheckbox) {
+      this._inspectCheckbox.checked = enabled;
+    }
     this._emit('statechange');
   }
 
@@ -430,7 +568,12 @@ export class OvertureMapsControl implements IControl {
   private _cloneThemes(): Record<OvertureTheme, OvertureThemeState> {
     const themes = {} as Record<OvertureTheme, OvertureThemeState>;
     for (const theme of THEME_IDS) {
-      themes[theme] = { ...this._state.themes[theme] };
+      const source = this._state.themes[theme];
+      const layers = {} as Record<string, OvertureLayerState>;
+      for (const sourceLayer of Object.keys(source.layers)) {
+        layers[sourceLayer] = { ...source.layers[sourceLayer] };
+      }
+      themes[theme] = { expanded: source.expanded, layers };
     }
     return themes;
   }
@@ -475,7 +618,7 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
-   * Rebuilds the sources and layers for all visible themes using the
+   * Rebuilds the sources and layers for all visible layers using the
    * active release.
    */
   private _applyRelease(): void {
@@ -484,18 +627,21 @@ export class OvertureMapsControl implements IControl {
     }
     this._removeAllThemes();
     for (const theme of THEME_IDS) {
-      if (this._state.themes[theme].visible) {
-        this._addTheme(theme);
+      const themeState = this._state.themes[theme];
+      for (const sourceLayer of Object.keys(themeState.layers)) {
+        if (themeState.layers[sourceLayer].visible) {
+          this._addLayer(theme, sourceLayer);
+        }
       }
     }
   }
 
   /**
-   * Adds the source and layers for a theme to the map.
+   * Ensures a theme's vector source exists on the map.
    *
-   * @param theme - The theme to add
+   * @param theme - The theme whose source to add
    */
-  private _addTheme(theme: OvertureTheme): void {
+  private _ensureSource(theme: OvertureTheme): void {
     if (!this._map || !this._state.release) {
       return;
     }
@@ -506,11 +652,52 @@ export class OvertureMapsControl implements IControl {
         url: tileUrlForTheme(this._options.tilesBaseUrl, this._state.release, theme),
       });
     }
-    const opacity = this._state.themes[theme].opacity;
-    for (const spec of buildLayerSpecs(theme, opacity, this._options.themeColors?.[theme])) {
+  }
+
+  /**
+   * Adds the layers for a single source layer to the map.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   */
+  private _addLayer(theme: OvertureTheme, sourceLayer: string): void {
+    if (!this._map || !this._state.release) {
+      return;
+    }
+    this._ensureSource(theme);
+    const layerState = this._state.themes[theme].layers[sourceLayer];
+    for (const spec of buildSourceLayerSpecs(
+      theme,
+      sourceLayer,
+      layerState.opacity,
+      layerState.color
+    )) {
       if (!this._map.getLayer(spec.id)) {
         this._map.addLayer(spec);
       }
+    }
+  }
+
+  /**
+   * Removes the layers for a single source layer, dropping the theme source
+   * once none of its layers remain on the map.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   */
+  private _removeLayer(theme: OvertureTheme, sourceLayer: string): void {
+    if (!this._map) {
+      return;
+    }
+    for (const layerId of layerIdsForSourceLayer(theme, sourceLayer)) {
+      if (this._map.getLayer(layerId)) {
+        this._map.removeLayer(layerId);
+      }
+    }
+    const sourceId = sourceIdForTheme(theme);
+    const stillUsed = layerIdsForTheme(theme).some((id) => this._map?.getLayer(id));
+    if (!stillUsed && this._map.getSource(sourceId)) {
+      this._map.removeSource(sourceId);
     }
   }
 
@@ -565,7 +752,7 @@ export class OvertureMapsControl implements IControl {
    * Wires click and hover handlers for feature inspection.
    */
   private _setupInspect(): void {
-    if (!this._map) {
+    if (!this._map || this._clickHandler) {
       return;
     }
 
@@ -596,6 +783,25 @@ export class OvertureMapsControl implements IControl {
       this._map.getCanvas().style.cursor = features.length ? 'pointer' : '';
     };
     this._map.on('mousemove', this._moveHandler);
+  }
+
+  /**
+   * Removes the feature inspection handlers and any open popup.
+   */
+  private _teardownInspect(): void {
+    if (this._clickHandler && this._map) {
+      this._map.off('click', this._clickHandler);
+    }
+    this._clickHandler = null;
+    if (this._moveHandler && this._map) {
+      this._map.off('mousemove', this._moveHandler);
+    }
+    this._moveHandler = null;
+    this._popup?.remove();
+    this._popup = undefined;
+    if (this._map) {
+      this._map.getCanvas().style.cursor = '';
+    }
   }
 
   /**
@@ -737,6 +943,7 @@ export class OvertureMapsControl implements IControl {
     content.className = 'overture-control-content';
 
     content.appendChild(this._createReleaseRow());
+    content.appendChild(this._createInspectRow());
 
     this._errorEl = document.createElement('div');
     this._errorEl.className = 'overture-control-error';
@@ -746,7 +953,7 @@ export class OvertureMapsControl implements IControl {
     const themeList = document.createElement('div');
     themeList.className = 'overture-control-themes';
     for (const theme of THEME_IDS) {
-      themeList.appendChild(this._createThemeRow(theme));
+      themeList.appendChild(this._createThemeGroup(theme));
     }
     content.appendChild(themeList);
 
@@ -758,7 +965,52 @@ export class OvertureMapsControl implements IControl {
     panel.appendChild(header);
     panel.appendChild(content);
 
+    // Drag handle for resizing the panel width (positioned per corner)
+    panel.appendChild(this._createResizeHandle());
+
     return panel;
+  }
+
+  /**
+   * Creates the feature inspection toggle row.
+   *
+   * @returns The inspect row element
+   */
+  private _createInspectRow(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'overture-inspect-row';
+
+    const label = document.createElement('label');
+    label.className = 'overture-inspect-toggle';
+
+    this._inspectCheckbox = document.createElement('input');
+    this._inspectCheckbox.type = 'checkbox';
+    this._inspectCheckbox.className = 'overture-inspect-checkbox';
+    this._inspectCheckbox.checked = this._state.inspect;
+    this._inspectCheckbox.addEventListener('change', () => {
+      this.setInspect(this._inspectCheckbox!.checked);
+    });
+
+    const text = document.createElement('span');
+    text.textContent = 'Inspect features on click';
+
+    label.appendChild(this._inspectCheckbox);
+    label.appendChild(text);
+    row.appendChild(label);
+    return row;
+  }
+
+  /**
+   * Creates the panel drag handle used to resize the panel width.
+   *
+   * @returns The resize handle element
+   */
+  private _createResizeHandle(): HTMLElement {
+    const handle = document.createElement('div');
+    handle.className = 'overture-resize-handle';
+    handle.setAttribute('aria-hidden', 'true');
+    handle.addEventListener('pointerdown', (e) => this._startResize(e));
+    return handle;
   }
 
   /**
@@ -810,54 +1062,120 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
-   * Creates a panel row for one theme: checkbox, color swatch, label, and
-   * opacity slider.
+   * Creates a collapsible panel group for one theme: a header with a master
+   * checkbox and an expand toggle, plus a row per source layer.
    *
    * @param theme - The theme to render
-   * @returns The theme row element
+   * @returns The theme group element
    */
-  private _createThemeRow(theme: OvertureTheme): HTMLElement {
+  private _createThemeGroup(theme: OvertureTheme): HTMLElement {
     const def = THEMES[theme];
     const themeState = this._state.themes[theme];
 
-    const row = document.createElement('div');
-    row.className = 'overture-theme-row';
-    row.dataset.theme = theme;
+    const group = document.createElement('div');
+    group.className = 'overture-theme-group';
+    group.dataset.theme = theme;
 
-    const top = document.createElement('label');
-    top.className = 'overture-theme-toggle';
+    const header = document.createElement('div');
+    header.className = 'overture-theme-header';
+
+    const caret = document.createElement('button');
+    caret.type = 'button';
+    caret.className = 'overture-theme-caret';
+    caret.setAttribute('aria-label', `Toggle ${def.label} layers`);
+    caret.setAttribute('aria-expanded', String(themeState.expanded));
+    caret.innerHTML = '&rsaquo;';
+    caret.addEventListener('click', () => {
+      this.setThemeExpanded(theme, !this._state.themes[theme].expanded);
+    });
+
+    const label = document.createElement('label');
+    label.className = 'overture-theme-toggle';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.className = 'overture-theme-checkbox';
-    checkbox.checked = themeState.visible;
     checkbox.addEventListener('change', () => {
       this.setThemeVisible(theme, checkbox.checked);
     });
-
-    const swatch = document.createElement('span');
-    swatch.className = 'overture-theme-swatch';
-    swatch.style.backgroundColor = this._options.themeColors?.[theme] ?? def.color;
 
     const name = document.createElement('span');
     name.className = 'overture-theme-name';
     name.textContent = def.label;
 
+    label.appendChild(checkbox);
+    label.appendChild(name);
+
+    header.appendChild(caret);
+    header.appendChild(label);
+
+    const layers = document.createElement('div');
+    layers.className = 'overture-theme-layers';
+    for (const layer of def.layers) {
+      layers.appendChild(this._createLayerRow(theme, layer.sourceLayer));
+    }
+
+    group.appendChild(header);
+    group.appendChild(layers);
+
+    this._applyThemeGroupState(group, theme);
+    return group;
+  }
+
+  /**
+   * Creates a panel row for one source layer: checkbox, color picker, label,
+   * and opacity slider.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   * @returns The layer row element
+   */
+  private _createLayerRow(theme: OvertureTheme, sourceLayer: string): HTMLElement {
+    const layerState = this._state.themes[theme].layers[sourceLayer];
+
+    const row = document.createElement('div');
+    row.className = 'overture-layer-row';
+    row.dataset.layer = sourceLayer;
+
+    const top = document.createElement('label');
+    top.className = 'overture-layer-toggle';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'overture-layer-checkbox';
+    checkbox.checked = layerState.visible;
+    checkbox.addEventListener('change', () => {
+      this.setLayerVisible(theme, sourceLayer, checkbox.checked);
+    });
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'overture-layer-color';
+    colorInput.value = layerState.color;
+    colorInput.setAttribute('aria-label', `${this._humanizeLayer(sourceLayer)} color`);
+    colorInput.addEventListener('input', () => {
+      this.setLayerColor(theme, sourceLayer, colorInput.value);
+    });
+
+    const name = document.createElement('span');
+    name.className = 'overture-layer-name';
+    name.textContent = this._humanizeLayer(sourceLayer);
+
     top.appendChild(checkbox);
-    top.appendChild(swatch);
+    top.appendChild(colorInput);
     top.appendChild(name);
 
     const slider = document.createElement('input');
     slider.type = 'range';
-    slider.className = 'overture-theme-opacity';
+    slider.className = 'overture-layer-opacity';
     slider.min = '0';
     slider.max = '1';
     slider.step = '0.05';
-    slider.value = String(themeState.opacity);
-    slider.disabled = !themeState.visible;
-    slider.setAttribute('aria-label', `${def.label} opacity`);
+    slider.value = String(layerState.opacity);
+    slider.disabled = !layerState.visible;
+    slider.setAttribute('aria-label', `${this._humanizeLayer(sourceLayer)} opacity`);
     slider.addEventListener('input', () => {
-      this.setThemeOpacity(theme, Number(slider.value));
+      this.setLayerOpacity(theme, sourceLayer, Number(slider.value));
     });
 
     row.appendChild(top);
@@ -866,25 +1184,134 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
-   * Syncs a theme row's inputs with the current state.
+   * Turns a source-layer name into a human-readable label.
    *
-   * @param theme - The theme row to update
+   * @param sourceLayer - The source-layer name (e.g. `land_cover`)
+   * @returns A display label (e.g. `Land cover`)
    */
-  private _syncThemeRow(theme: OvertureTheme): void {
-    const row = this._panel?.querySelector<HTMLElement>(`[data-theme="${theme}"]`);
+  private _humanizeLayer(sourceLayer: string): string {
+    const spaced = sourceLayer.replace(/_/g, ' ');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+
+  /**
+   * Applies expanded state and master-checkbox state to a theme group.
+   *
+   * @param group - The theme group element
+   * @param theme - The theme the group represents
+   */
+  private _applyThemeGroupState(group: HTMLElement, theme: OvertureTheme): void {
+    const themeState = this._state.themes[theme];
+    group.classList.toggle('expanded', themeState.expanded);
+
+    const caret = group.querySelector<HTMLElement>('.overture-theme-caret');
+    caret?.setAttribute('aria-expanded', String(themeState.expanded));
+
+    const layerStates = Object.values(themeState.layers);
+    const visibleCount = layerStates.filter((l) => l.visible).length;
+    const checkbox = group.querySelector<HTMLInputElement>('.overture-theme-checkbox');
+    if (checkbox) {
+      checkbox.checked = visibleCount === layerStates.length;
+      checkbox.indeterminate = visibleCount > 0 && visibleCount < layerStates.length;
+    }
+  }
+
+  /**
+   * Syncs a theme group's header and every layer row with the current state.
+   *
+   * @param theme - The theme to update
+   */
+  private _syncThemeGroup(theme: OvertureTheme): void {
+    const group = this._panel?.querySelector<HTMLElement>(
+      `.overture-theme-group[data-theme="${theme}"]`
+    );
+    if (!group) {
+      return;
+    }
+    this._applyThemeGroupState(group, theme);
+    for (const sourceLayer of Object.keys(this._state.themes[theme].layers)) {
+      this._syncLayerRow(theme, sourceLayer);
+    }
+  }
+
+  /**
+   * Syncs a single layer row's inputs with the current state.
+   *
+   * @param theme - The theme the layer belongs to
+   * @param sourceLayer - The source-layer name
+   */
+  private _syncLayerRow(theme: OvertureTheme, sourceLayer: string): void {
+    const row = this._panel?.querySelector<HTMLElement>(
+      `.overture-theme-group[data-theme="${theme}"] .overture-layer-row[data-layer="${sourceLayer}"]`
+    );
     if (!row) {
       return;
     }
-    const themeState = this._state.themes[theme];
-    const checkbox = row.querySelector<HTMLInputElement>('.overture-theme-checkbox');
-    const slider = row.querySelector<HTMLInputElement>('.overture-theme-opacity');
+    const layerState = this._state.themes[theme].layers[sourceLayer];
+    const checkbox = row.querySelector<HTMLInputElement>('.overture-layer-checkbox');
+    const colorInput = row.querySelector<HTMLInputElement>('.overture-layer-color');
+    const slider = row.querySelector<HTMLInputElement>('.overture-layer-opacity');
     if (checkbox) {
-      checkbox.checked = themeState.visible;
+      checkbox.checked = layerState.visible;
+    }
+    if (colorInput) {
+      colorInput.value = layerState.color;
     }
     if (slider) {
-      slider.value = String(themeState.opacity);
-      slider.disabled = !themeState.visible;
+      slider.value = String(layerState.opacity);
+      slider.disabled = !layerState.visible;
     }
+  }
+
+  /**
+   * Starts a panel-width drag-resize from the handle.
+   *
+   * @param event - The initiating pointer event
+   */
+  private _startResize(event: PointerEvent): void {
+    if (!this._panel) {
+      return;
+    }
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = this._panel.getBoundingClientRect().width;
+    const position = this._getControlPosition();
+    const anchorLeft = position === 'top-left' || position === 'bottom-left';
+    this._panel.classList.add('resizing');
+
+    const maxWidth = Math.min(
+      MAX_PANEL_WIDTH,
+      (this._mapContainer?.clientWidth ?? window.innerWidth) - 20
+    );
+
+    this._resizePointerMove = (e: PointerEvent) => {
+      if (!this._panel) {
+        return;
+      }
+      const delta = e.clientX - startX;
+      // Left-anchored panels grow rightward; right-anchored grow leftward
+      const raw = anchorLeft ? startWidth + delta : startWidth - delta;
+      const width = Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, raw));
+      this._panel.style.width = `${width}px`;
+      this._state.panelWidth = Math.round(width);
+      this._updatePanelPosition();
+    };
+
+    this._resizePointerUp = () => {
+      if (this._resizePointerMove) {
+        document.removeEventListener('pointermove', this._resizePointerMove);
+        this._resizePointerMove = null;
+      }
+      if (this._resizePointerUp) {
+        document.removeEventListener('pointerup', this._resizePointerUp);
+        this._resizePointerUp = null;
+      }
+      this._panel?.classList.remove('resizing');
+      this._emit('statechange');
+    };
+
+    document.addEventListener('pointermove', this._resizePointerMove);
+    document.addEventListener('pointerup', this._resizePointerUp);
   }
 
   /**
@@ -956,6 +1383,11 @@ export class OvertureMapsControl implements IControl {
     const buttonRect = button.getBoundingClientRect();
     const mapRect = this._mapContainer.getBoundingClientRect();
     const position = this._getControlPosition();
+
+    // Mark the anchored edge so the resize handle sits on the free side
+    const anchorLeft = position === 'top-left' || position === 'bottom-left';
+    this._panel.classList.toggle('ovt-anchor-left', anchorLeft);
+    this._panel.classList.toggle('ovt-anchor-right', !anchorLeft);
 
     // Calculate button position relative to map container
     const buttonTop = buttonRect.top - mapRect.top;

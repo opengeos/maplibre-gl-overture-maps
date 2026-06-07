@@ -1,20 +1,23 @@
 import { useState, useCallback } from 'react';
-import type { OvertureMapsState, OvertureThemeState } from '../core/types';
-import { THEME_IDS } from '../core/themes';
+import type { OvertureMapsState, OvertureThemeState, OvertureLayerState } from '../core/types';
+import { THEMES, THEME_IDS } from '../core/themes';
 import type { OvertureTheme } from '../core/themes';
 
 /**
- * Builds the default per-theme state.
+ * Builds the default per-theme, per-layer state.
  *
- * @returns Per-theme visibility and opacity defaults
+ * @returns Per-theme state with each source layer's defaults
  */
 function defaultThemes(): Record<OvertureTheme, OvertureThemeState> {
   const themes = {} as Record<OvertureTheme, OvertureThemeState>;
   for (const theme of THEME_IDS) {
-    themes[theme] = {
-      visible: ['buildings', 'transportation', 'places'].includes(theme),
-      opacity: 0.8,
-    };
+    const def = THEMES[theme];
+    const visible = ['buildings', 'transportation', 'places'].includes(theme);
+    const layers = {} as Record<string, OvertureLayerState>;
+    for (const layer of def.layers) {
+      layers[layer.sourceLayer] = { visible, opacity: 0.8, color: def.color };
+    }
+    themes[theme] = { expanded: false, layers };
   }
   return themes;
 }
@@ -55,6 +58,7 @@ export function useOvertureMapsState(initialState?: Partial<OvertureMapsState>) 
     release: '',
     releases: [],
     themes: defaultThemes(),
+    inspect: true,
     error: null,
     ...initialState,
   });
@@ -83,23 +87,72 @@ export function useOvertureMapsState(initialState?: Partial<OvertureMapsState>) 
   }, []);
 
   /**
-   * Sets a theme's visibility
+   * Maps every source layer of a theme through an updater
    */
-  const setThemeVisible = useCallback((theme: OvertureTheme, visible: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      themes: { ...prev.themes, [theme]: { ...prev.themes[theme], visible } },
-    }));
-  }, []);
+  const updateThemeLayers = useCallback(
+    (theme: OvertureTheme, update: (layer: OvertureLayerState) => OvertureLayerState) => {
+      setState((prev) => {
+        const themeState = prev.themes[theme];
+        const layers = {} as Record<string, OvertureLayerState>;
+        for (const key of Object.keys(themeState.layers)) {
+          layers[key] = update(themeState.layers[key]);
+        }
+        return { ...prev, themes: { ...prev.themes, [theme]: { ...themeState, layers } } };
+      });
+    },
+    []
+  );
 
   /**
-   * Sets a theme's opacity
+   * Sets the visibility of every layer in a theme
    */
-  const setThemeOpacity = useCallback((theme: OvertureTheme, opacity: number) => {
-    setState((prev) => ({
-      ...prev,
-      themes: { ...prev.themes, [theme]: { ...prev.themes[theme], opacity } },
-    }));
+  const setThemeVisible = useCallback(
+    (theme: OvertureTheme, visible: boolean) => {
+      updateThemeLayers(theme, (layer) => ({ ...layer, visible }));
+    },
+    [updateThemeLayers]
+  );
+
+  /**
+   * Sets the opacity of every layer in a theme
+   */
+  const setThemeOpacity = useCallback(
+    (theme: OvertureTheme, opacity: number) => {
+      updateThemeLayers(theme, (layer) => ({ ...layer, opacity }));
+    },
+    [updateThemeLayers]
+  );
+
+  /**
+   * Updates a single source layer's state
+   */
+  const setLayer = useCallback(
+    (theme: OvertureTheme, sourceLayer: string, patch: Partial<OvertureLayerState>) => {
+      setState((prev) => {
+        const themeState = prev.themes[theme];
+        return {
+          ...prev,
+          themes: {
+            ...prev.themes,
+            [theme]: {
+              ...themeState,
+              layers: {
+                ...themeState.layers,
+                [sourceLayer]: { ...themeState.layers[sourceLayer], ...patch },
+              },
+            },
+          },
+        };
+      });
+    },
+    []
+  );
+
+  /**
+   * Enables or disables the feature inspection picker
+   */
+  const setInspect = useCallback((inspect: boolean) => {
+    setState((prev) => ({ ...prev, inspect }));
   }, []);
 
   /**
@@ -124,6 +177,8 @@ export function useOvertureMapsState(initialState?: Partial<OvertureMapsState>) 
     setRelease,
     setThemeVisible,
     setThemeOpacity,
+    setLayer,
+    setInspect,
     reset,
     toggle,
   };

@@ -92,13 +92,25 @@ export interface OvertureMapsControlOptions {
 }
 
 /**
- * Visibility and opacity of a single Overture theme.
+ * Styling and visibility of a single source layer within a theme.
+ */
+export interface OvertureLayerState {
+  /** Whether the layer is on the map */
+  visible: boolean;
+  /** Layer opacity (0..1) */
+  opacity: number;
+  /** Layer color (hex) */
+  color: string;
+}
+
+/**
+ * State of a single Overture theme and its source layers.
  */
 export interface OvertureThemeState {
-  /** Whether the theme layers are on the map */
-  visible: boolean;
-  /** Theme opacity (0..1) */
-  opacity: number;
+  /** Whether the theme's layer list is expanded in the panel */
+  expanded: boolean;
+  /** Per-source-layer styling and visibility, keyed by source-layer name */
+  layers: Record<string, OvertureLayerState>;
 }
 
 /**
@@ -129,6 +141,11 @@ export interface OvertureMapsState {
    * Per-theme visibility and opacity
    */
   themes: Record<OvertureTheme, OvertureThemeState>;
+
+  /**
+   * Whether the feature inspection picker is enabled
+   */
+  inspect: boolean;
 
   /**
    * Last error message, or null when healthy

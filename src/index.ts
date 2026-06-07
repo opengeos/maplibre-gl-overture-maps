@@ -9,10 +9,13 @@ export {
   THEMES,
   THEME_IDS,
   buildLayerSpecs,
+  buildSourceLayerSpecs,
   layerIdsForTheme,
+  layerIdsForSourceLayer,
   sourceIdForTheme,
   tileUrlForTheme,
   opacityPropertyForLayerType,
+  colorPropertyForLayerType,
 } from './lib/core/themes';
 
 // Releases helpers
@@ -31,6 +34,7 @@ export type {
   OvertureMapsControlOptions,
   OvertureMapsState,
   OvertureThemeState,
+  OvertureLayerState,
   OvertureMapsEvent,
   OvertureMapsEventHandler,
   ControlColorScheme,
