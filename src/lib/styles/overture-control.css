@@ -84,12 +84,17 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  outline: none;
   color: var(--ovt-fg);
 }
 
 .overture-control-toggle:hover {
   background-color: var(--ovt-hover);
+}
+
+.overture-control-toggle:focus-visible,
+.overture-control-close:focus-visible {
+  outline: 2px solid var(--ovt-accent);
+  outline-offset: 2px;
 }
 
 .overture-control-toggle .overture-control-icon {
@@ -106,7 +111,7 @@
   width: 22px;
   height: 22px;
   display: block;
-  stroke: currentColor;
+  stroke: currentcolor;
   fill: none;
 }
 
@@ -352,7 +357,8 @@
 .overture-popup-table td {
   padding: 2px 4px;
   vertical-align: top;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .overture-popup-key {

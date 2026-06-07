@@ -599,6 +599,24 @@ export class OvertureMapsControl implements IControl {
   }
 
   /**
+   * Sanitizes a feature-sourced value for display in the popup.
+   *
+   * Strips control characters and truncates long values so malformed
+   * tile properties cannot break the UI.
+   *
+   * @param value - The raw property key or value
+   * @param maxLength - Maximum displayed length
+   * @returns A safe display string
+   */
+  private _sanitizeDisplayString(value: unknown, maxLength = 200): string {
+    const text =
+      typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value);
+    // eslint-disable-next-line no-control-regex
+    const cleaned = text.replace(/[\u0000-\u001f\u007f]/g, '');
+    return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength)}…` : cleaned;
+  }
+
+  /**
    * Builds the popup DOM showing a feature's properties.
    *
    * @param sourceLayer - The feature's source layer name
@@ -614,7 +632,7 @@ export class OvertureMapsControl implements IControl {
 
     const heading = document.createElement('div');
     heading.className = 'overture-popup-heading';
-    heading.textContent = sourceLayer || 'feature';
+    heading.textContent = this._sanitizeDisplayString(sourceLayer || 'feature', 80);
     wrapper.appendChild(heading);
 
     const table = document.createElement('table');
@@ -631,10 +649,10 @@ export class OvertureMapsControl implements IControl {
       const row = document.createElement('tr');
       const keyCell = document.createElement('td');
       keyCell.className = 'overture-popup-key';
-      keyCell.textContent = key;
+      keyCell.textContent = this._sanitizeDisplayString(key, 80);
       const valueCell = document.createElement('td');
       valueCell.className = 'overture-popup-value';
-      valueCell.textContent = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      valueCell.textContent = this._sanitizeDisplayString(value);
       row.appendChild(keyCell);
       row.appendChild(valueCell);
       table.appendChild(row);
