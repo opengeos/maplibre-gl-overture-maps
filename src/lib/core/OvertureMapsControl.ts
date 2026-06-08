@@ -710,8 +710,17 @@ export class OvertureMapsControl implements IControl {
     const filename = `overture-${theme}-${sourceLayer}.geojson`;
     if (this._options.onExport) {
       // Let the host save the file (e.g. a native dialog in a desktop webview
-      // where anchor-based downloads do not work).
-      this._options.onExport(filename, collection);
+      // where anchor-based downloads do not work). Guard against a host
+      // handler throwing so the click path stays consistent.
+      try {
+        this._options.onExport(filename, collection);
+      } catch (error) {
+        this._notify(`Failed to export ${label}.`);
+        this._setError(
+          `Export failed (${error instanceof Error ? error.message : 'unknown error'}).`
+        );
+        return null;
+      }
     } else {
       this._downloadGeoJSON(filename, collection);
     }
