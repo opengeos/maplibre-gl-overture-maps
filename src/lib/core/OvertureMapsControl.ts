@@ -37,9 +37,15 @@ import { ensurePmtilesProtocol } from './pmtilesProtocol';
  * Default options for the OvertureMapsControl
  */
 const DEFAULT_OPTIONS: Required<
-  Omit<OvertureMapsControlOptions, 'release' | 'themeColors' | 'themeOpacity'>
+  Omit<
+    OvertureMapsControlOptions,
+    'release' | 'themeColors' | 'themeOpacity' | 'onExport'
+  >
 > &
-  Pick<OvertureMapsControlOptions, 'release' | 'themeColors' | 'themeOpacity'> = {
+  Pick<
+    OvertureMapsControlOptions,
+    'release' | 'themeColors' | 'themeOpacity' | 'onExport'
+  > = {
   collapsed: true,
   position: 'top-right',
   title: 'Overture Maps',
@@ -54,6 +60,7 @@ const DEFAULT_OPTIONS: Required<
   visibleThemes: ['buildings', 'transportation', 'places'],
   themeColors: undefined,
   themeOpacity: undefined,
+  onExport: undefined,
 };
 
 const DEFAULT_OPACITY = 0.8;
@@ -700,7 +707,23 @@ export class OvertureMapsControl implements IControl {
       return null;
     }
 
-    this._downloadGeoJSON(`overture-${theme}-${sourceLayer}.geojson`, collection);
+    const filename = `overture-${theme}-${sourceLayer}.geojson`;
+    if (this._options.onExport) {
+      // Let the host save the file (e.g. a native dialog in a desktop webview
+      // where anchor-based downloads do not work). Guard against a host
+      // handler throwing so the click path stays consistent.
+      try {
+        this._options.onExport(filename, collection);
+      } catch (error) {
+        this._notify(`Failed to export ${label}.`);
+        this._setError(
+          `Export failed (${error instanceof Error ? error.message : 'unknown error'}).`
+        );
+        return null;
+      }
+    } else {
+      this._downloadGeoJSON(filename, collection);
+    }
     const count = collection.features.length;
     this._notify(`Exported ${count} ${label} feature${count === 1 ? '' : 's'}.`);
     return collection;

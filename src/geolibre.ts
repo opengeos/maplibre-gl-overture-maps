@@ -82,7 +82,7 @@ function isOvertureMapsState(
 export const plugin: GeoLibrePlugin = {
   id: "maplibre-gl-overture-maps",
   name: "MapLibre GL Overture Maps",
-  version: "0.2.0",
+  version: "0.3.0",
   activate(app) {
     control = control ?? createControl();
     const added = app.addMapControl(control, position);
