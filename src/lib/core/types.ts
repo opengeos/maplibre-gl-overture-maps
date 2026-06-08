@@ -1,3 +1,4 @@
+import type { FeatureCollection } from 'geojson';
 import type { Map } from 'maplibre-gl';
 import type { OvertureTheme } from './themes';
 
@@ -96,6 +97,17 @@ export interface OvertureMapsControlOptions {
    * @default 0.8 for every theme
    */
   themeOpacity?: Partial<Record<OvertureTheme, number>>;
+
+  /**
+   * Custom handler for exporting a layer to GeoJSON. When provided, it is
+   * called instead of the built-in browser download, letting a host
+   * application save the file its own way (e.g. a native save dialog in a
+   * desktop webview where anchor downloads do not work).
+   *
+   * @param filename - The suggested file name (e.g. `overture-buildings-building.geojson`)
+   * @param data - The exported FeatureCollection
+   */
+  onExport?: (filename: string, data: FeatureCollection) => void;
 }
 
 /**
