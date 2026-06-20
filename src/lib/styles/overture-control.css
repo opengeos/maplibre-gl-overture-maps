@@ -23,6 +23,7 @@
   --ovt-scrollbar-hover: #aaaaaa;
   --ovt-error-bg: #fdecea;
   --ovt-error-fg: #b3261e;
+  --ovt-success-fg: #1a7f37;
 }
 
 /* Dark scheme via system preference (unless a scheme is forced) */
@@ -43,6 +44,7 @@
     --ovt-scrollbar-hover: #5d6b7a;
     --ovt-error-bg: #43292b;
     --ovt-error-fg: #f2b8b5;
+    --ovt-success-fg: #5fd28b;
   }
 }
 
@@ -63,6 +65,7 @@
   --ovt-scrollbar-hover: #5d6b7a;
   --ovt-error-bg: #43292b;
   --ovt-error-fg: #f2b8b5;
+  --ovt-success-fg: #5fd28b;
 }
 
 /* Container - matches maplibregl-ctrl styling.
@@ -589,6 +592,15 @@
   margin: 10px 0 0 0;
   color: var(--ovt-muted);
   font-size: 11px;
+}
+
+/* Positive confirmation once the detail-theme zoom threshold is met */
+.overture-control-hint--active {
+  color: var(--ovt-success-fg);
+}
+
+.overture-control-hint--active::before {
+  content: '\2713\00a0';
 }
 
 /* Inspect popup */

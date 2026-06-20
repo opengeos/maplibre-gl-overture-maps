@@ -106,6 +106,8 @@ export class OvertureMapsControl implements IControl {
   private _noticeEl?: HTMLElement;
   private _noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private _inspectCheckbox?: HTMLInputElement;
+  // Zoom hint paragraph; its text and styling track the live map zoom.
+  private _hintEl?: HTMLElement;
 
   // System color-scheme adaptation (only used when theme: 'auto')
   private _schemeMedia: MediaQueryList | null = null;
@@ -130,6 +132,10 @@ export class OvertureMapsControl implements IControl {
   // Re-applies the Overture sources and layers after a basemap/style reload,
   // which drops every non-base layer from the map.
   private _styleLoadHandler: (() => void) | null = null;
+
+  // Keeps the zoom hint in sync with the live map zoom so the heads-up about
+  // detail themes turns into a positive confirmation once the threshold is met.
+  private _zoomHandler: (() => void) | null = null;
 
   /**
    * Creates a new OvertureMapsControl instance.
@@ -196,6 +202,11 @@ export class OvertureMapsControl implements IControl {
     // no-op until a release has resolved, so the initial load is unaffected.
     this._styleLoadHandler = () => this._applyRelease();
     this._map.on('style.load', this._styleLoadHandler);
+
+    // Update the zoom hint as the map zoom crosses the detail-theme threshold,
+    // so a satisfied heads-up does not linger as an outdated warning.
+    this._zoomHandler = () => this._updateHint();
+    this._map.on('zoom', this._zoomHandler);
 
     // Follow the system color scheme live when theme is 'auto'
     this._setupSchemeListener();
@@ -267,6 +278,10 @@ export class OvertureMapsControl implements IControl {
       this._map.off('style.load', this._styleLoadHandler);
       this._styleLoadHandler = null;
     }
+    if (this._zoomHandler && this._map) {
+      this._map.off('zoom', this._zoomHandler);
+      this._zoomHandler = null;
+    }
     if (this._clickOutsideHandler) {
       document.removeEventListener('click', this._clickOutsideHandler);
       this._clickOutsideHandler = null;
@@ -285,6 +300,7 @@ export class OvertureMapsControl implements IControl {
     this._releaseSelect = undefined;
     this._errorEl = undefined;
     this._noticeEl = undefined;
+    this._hintEl = undefined;
     this._inspectCheckbox = undefined;
     this._eventHandlers.clear();
   }
@@ -1297,7 +1313,8 @@ export class OvertureMapsControl implements IControl {
 
     const hint = document.createElement('p');
     hint.className = 'overture-control-hint';
-    hint.textContent = 'Addresses and places appear at zoom 14+.';
+    this._hintEl = hint;
+    this._updateHint();
     content.appendChild(hint);
 
     panel.appendChild(header);
@@ -1307,6 +1324,38 @@ export class OvertureMapsControl implements IControl {
     panel.appendChild(this._createResizeHandle());
 
     return panel;
+  }
+
+  /**
+   * The lowest zoom at which both detail themes (addresses and places) render.
+   *
+   * Derived from the theme definitions so the hint stays in sync with the
+   * tileset minzoom rather than hardcoding the value in the message.
+   *
+   * @returns The detail-theme minimum zoom (defaults to 14)
+   */
+  private get _detailMinZoom(): number {
+    return Math.max(THEMES.addresses.minzoom ?? 14, THEMES.places.minzoom ?? 14);
+  }
+
+  /**
+   * Updates the zoom hint to reflect the live map zoom.
+   *
+   * Below the detail-theme threshold the hint reads as a heads-up that
+   * addresses and places only appear once zoomed in. At or above the threshold
+   * it switches to a positive confirmation (with the `--active` modifier for a
+   * success style) so a satisfied warning does not linger as stale guidance.
+   */
+  private _updateHint(): void {
+    if (!this._hintEl) {
+      return;
+    }
+    const threshold = this._detailMinZoom;
+    const active = this._map ? this._map.getZoom() >= threshold : false;
+    this._hintEl.classList.toggle('overture-control-hint--active', active);
+    this._hintEl.textContent = active
+      ? 'Addresses and places active.'
+      : `Addresses and places appear at zoom ${threshold}+.`;
   }
 
   /**
