@@ -1,6 +1,6 @@
 {
   "name": "maplibre-gl-overture-maps",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A MapLibre GL JS plugin for visualizing Overture Maps PMTiles themes",
   "type": "module",
   "main": "./dist/index.cjs",
