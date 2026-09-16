@@ -227,3 +227,47 @@ describe("OvertureMapsControl on a non-MapLibre engine", () => {
     control.onRemove();
   });
 });
+
+describe("OvertureMapsControl corner detection", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("carries both engines' control classes", async () => {
+    installMapLibreGlobal();
+    const OvertureMapsControl = await loadControl();
+    const map = createFakeMap();
+    const control = new OvertureMapsControl({ release: "2026-05-20.0" });
+    const element = control.onAdd(map as unknown as MapLibreMap);
+    for (const name of [
+      "maplibregl-ctrl",
+      "maplibregl-ctrl-group",
+      "mapboxgl-ctrl",
+      "mapboxgl-ctrl-group",
+    ]) {
+      expect(element.classList.contains(name), name).toBe(true);
+    }
+    control.onRemove();
+  });
+
+  it("reads its corner from a mapbox-gl corner container", async () => {
+    installMapLibreGlobal();
+    const OvertureMapsControl = await loadControl();
+    const map = createFakeMap();
+    const control = new OvertureMapsControl({
+      release: "2026-05-20.0",
+      collapsed: false,
+    });
+    const element = control.onAdd(map as unknown as MapLibreMap);
+    const corner = document.createElement("div");
+    corner.className = "mapboxgl-ctrl-bottom-left";
+    corner.appendChild(element);
+    map.getContainer().appendChild(corner);
+    expect(
+      (
+        control as unknown as { _getControlPosition(): string }
+      )._getControlPosition(),
+    ).toBe("bottom-left");
+    control.onRemove();
+  });
+});

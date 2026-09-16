@@ -1310,7 +1310,10 @@ export class OvertureMapsControl implements IControl {
    */
   private _createContainer(): HTMLElement {
     const container = document.createElement("div");
-    container.className = `maplibregl-ctrl maplibregl-ctrl-group overture-control${this._schemeClass()}${
+    // Both engines' control classes: MapLibre's and mapbox-gl's stylesheets
+    // each only know their own, and a class the loaded stylesheet does not
+    // define is inert.
+    container.className = `maplibregl-ctrl maplibregl-ctrl-group mapboxgl-ctrl mapboxgl-ctrl-group overture-control${this._schemeClass()}${
       this._options.className ? ` ${this._options.className}` : ""
     }`;
 
@@ -1976,14 +1979,18 @@ export class OvertureMapsControl implements IControl {
     const parent = this._container?.parentElement;
     if (!parent) return "top-right"; // Default
 
-    if (parent.classList.contains("maplibregl-ctrl-top-left"))
-      return "top-left";
-    if (parent.classList.contains("maplibregl-ctrl-top-right"))
-      return "top-right";
-    if (parent.classList.contains("maplibregl-ctrl-bottom-left"))
-      return "bottom-left";
-    if (parent.classList.contains("maplibregl-ctrl-bottom-right"))
-      return "bottom-right";
+    // The corner containers carry engine-specific class names
+    // (`maplibregl-ctrl-top-left` / `mapboxgl-ctrl-top-left`, ...).
+    for (const prefix of ["maplibregl", "mapboxgl"]) {
+      if (parent.classList.contains(`${prefix}-ctrl-top-left`))
+        return "top-left";
+      if (parent.classList.contains(`${prefix}-ctrl-top-right`))
+        return "top-right";
+      if (parent.classList.contains(`${prefix}-ctrl-bottom-left`))
+        return "bottom-left";
+      if (parent.classList.contains(`${prefix}-ctrl-bottom-right`))
+        return "bottom-right";
+    }
 
     return "top-right"; // Default
   }

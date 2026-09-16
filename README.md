@@ -205,7 +205,7 @@ const {
 
 ### Exported Types
 
-Exported from both entry points: `OvertureMapsControlOptions`, `OvertureMapsState`, `OvertureThemeState`, `OvertureLayerState`, `OvertureMapsEvent`, `OvertureMapsEventHandler`, `OvertureTheme`, `OvertureGeometry`, `OvertureLayerDef`, `ThemeDefinition`, and `ControlColorScheme`.
+Exported from both entry points: `OvertureMapsControlOptions`, `OvertureMapsState`, `OvertureThemeState`, `OvertureLayerState`, `OvertureMapsEvent`, `OvertureMapsEventHandler`, `OvertureTheme`, `OvertureGeometry`, `OvertureLayerDef`, `ThemeDefinition`, `ControlColorScheme`, `OverturePopup`, and `OverturePopupOptions`.
 
 Main entry only (`.`): `ReleasesResponse`. React entry only (`/react`): `OvertureMapsControlReactProps`.
 
@@ -360,7 +360,7 @@ docker run -p 8080:80 maplibre-gl-overture-maps
 - Overture tiles are designed for x-ray inspection, not as a production basemap. See the [Overture tiles docs](https://docs.overturemaps.org/examples/overture-tiles/).
 - The `addresses` and `places` themes only contain features at zoom 14 and above.
 - If the release list cannot be fetched (e.g. offline), the control falls back to a known release and emits an `error` event; pin a release with the `release` option to skip the fetch dependency.
-- The control only uses the Style Spec surface MapLibre and Mapbox GL JS share, so it can be mounted on a mapbox-gl map (3.30+, which reads `.pmtiles` archives natively) with `nativePmtiles: true` and `createPopup: (options) => new mapboxgl.Popup(options)`.
+- The control only uses the Style Spec surface MapLibre and Mapbox GL JS share, so it can be mounted on a mapbox-gl map (3.30+, which reads `.pmtiles` archives natively) with `nativePmtiles: true` and `createPopup: (options) => new mapboxgl.Popup(options)`. The control is typed against MapLibre's `IControl`; the runtime contract is the same, so cast it (`map.addControl(control as unknown as mapboxgl.IControl)`) or wrap it in a small adapter as a host that supports both engines would. Its container carries both engines' control classes and it reads its corner from either engine's corner container.
 
 ## License
 
