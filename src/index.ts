@@ -40,6 +40,8 @@ export type {
   OvertureMapsEvent,
   OvertureMapsEventHandler,
   ControlColorScheme,
+  OverturePopup,
+  OverturePopupOptions,
 } from './lib/core/types';
 export type {
   OvertureTheme,

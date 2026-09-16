@@ -1,4 +1,4 @@
-import type { LayerSpecification } from 'maplibre-gl';
+import type { LayerSpecification } from "maplibre-gl";
 
 /**
  * The Overture Maps data themes distributed as PMTiles archives.
@@ -6,17 +6,17 @@ import type { LayerSpecification } from 'maplibre-gl';
  * @see https://docs.overturemaps.org/examples/overture-tiles/
  */
 export type OvertureTheme =
-  | 'addresses'
-  | 'base'
-  | 'buildings'
-  | 'divisions'
-  | 'places'
-  | 'transportation';
+  | "addresses"
+  | "base"
+  | "buildings"
+  | "divisions"
+  | "places"
+  | "transportation";
 
 /**
  * Geometry rendered for a source layer within a theme tileset.
  */
-export type OvertureGeometry = 'point' | 'line' | 'polygon';
+export type OvertureGeometry = "point" | "line" | "polygon";
 
 /**
  * A source layer contained in an Overture theme PMTiles archive.
@@ -52,58 +52,58 @@ export interface ThemeDefinition {
  */
 export const THEMES: Record<OvertureTheme, ThemeDefinition> = {
   addresses: {
-    id: 'addresses',
-    label: 'Addresses',
-    color: '#e6194b',
-    layers: [{ sourceLayer: 'address', geometry: 'point' }],
+    id: "addresses",
+    label: "Addresses",
+    color: "#e6194b",
+    layers: [{ sourceLayer: "address", geometry: "point" }],
     minzoom: 14,
   },
   base: {
-    id: 'base',
-    label: 'Base',
-    color: '#3cb44b',
+    id: "base",
+    label: "Base",
+    color: "#3cb44b",
     layers: [
-      { sourceLayer: 'land', geometry: 'polygon' },
-      { sourceLayer: 'land_cover', geometry: 'polygon' },
-      { sourceLayer: 'land_use', geometry: 'polygon' },
-      { sourceLayer: 'water', geometry: 'polygon' },
-      { sourceLayer: 'bathymetry', geometry: 'polygon' },
-      { sourceLayer: 'infrastructure', geometry: 'line' },
+      { sourceLayer: "land", geometry: "polygon" },
+      { sourceLayer: "land_cover", geometry: "polygon" },
+      { sourceLayer: "land_use", geometry: "polygon" },
+      { sourceLayer: "water", geometry: "polygon" },
+      { sourceLayer: "bathymetry", geometry: "polygon" },
+      { sourceLayer: "infrastructure", geometry: "line" },
     ],
   },
   buildings: {
-    id: 'buildings',
-    label: 'Buildings',
-    color: '#f58231',
+    id: "buildings",
+    label: "Buildings",
+    color: "#f58231",
     layers: [
-      { sourceLayer: 'building', geometry: 'polygon' },
-      { sourceLayer: 'building_part', geometry: 'polygon' },
+      { sourceLayer: "building", geometry: "polygon" },
+      { sourceLayer: "building_part", geometry: "polygon" },
     ],
   },
   divisions: {
-    id: 'divisions',
-    label: 'Divisions',
-    color: '#911eb4',
+    id: "divisions",
+    label: "Divisions",
+    color: "#911eb4",
     layers: [
-      { sourceLayer: 'division_area', geometry: 'polygon' },
-      { sourceLayer: 'division_boundary', geometry: 'line' },
-      { sourceLayer: 'division', geometry: 'point' },
+      { sourceLayer: "division_area", geometry: "polygon" },
+      { sourceLayer: "division_boundary", geometry: "line" },
+      { sourceLayer: "division", geometry: "point" },
     ],
   },
   places: {
-    id: 'places',
-    label: 'Places',
-    color: '#4363d8',
-    layers: [{ sourceLayer: 'place', geometry: 'point' }],
+    id: "places",
+    label: "Places",
+    color: "#4363d8",
+    layers: [{ sourceLayer: "place", geometry: "point" }],
     minzoom: 14,
   },
   transportation: {
-    id: 'transportation',
-    label: 'Transportation',
-    color: '#f032e6',
+    id: "transportation",
+    label: "Transportation",
+    color: "#f032e6",
     layers: [
-      { sourceLayer: 'segment', geometry: 'line' },
-      { sourceLayer: 'connector', geometry: 'point' },
+      { sourceLayer: "segment", geometry: "line" },
+      { sourceLayer: "connector", geometry: "point" },
     ],
   },
 };
@@ -116,12 +116,12 @@ export const THEMES: Record<OvertureTheme, ThemeDefinition> = {
  * detail themes (addresses, places) sit above the background (base).
  */
 export const THEME_IDS: OvertureTheme[] = [
-  'addresses',
-  'places',
-  'transportation',
-  'buildings',
-  'divisions',
-  'base',
+  "addresses",
+  "places",
+  "transportation",
+  "buildings",
+  "divisions",
+  "base",
 ];
 
 /**
@@ -140,11 +140,21 @@ export function sourceIdForTheme(theme: OvertureTheme): string {
  * @param baseUrl - Base tiles URL (no trailing slash)
  * @param release - Overture release, e.g. `2026-05-20.0`
  * @param theme - The Overture theme identifier
- * @returns The `pmtiles://`-prefixed source URL
+ * @param nativePmtiles - When true, return the plain archive URL for a map
+ *   engine that reads `.pmtiles` natively (see
+ *   {@link OvertureMapsControlOptions.nativePmtiles}); otherwise prefix it
+ *   with MapLibre's `pmtiles://` protocol
+ * @returns The `pmtiles://`-prefixed source URL, or the plain archive URL
  */
-export function tileUrlForTheme(baseUrl: string, release: string, theme: OvertureTheme): string {
-  const trimmed = baseUrl.replace(/\/+$/, '');
-  return `pmtiles://${trimmed}/${release}/${theme}.pmtiles`;
+export function tileUrlForTheme(
+  baseUrl: string,
+  release: string,
+  theme: OvertureTheme,
+  nativePmtiles = false,
+): string {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  const archiveUrl = `${trimmed}/${release}/${theme}.pmtiles`;
+  return nativePmtiles ? archiveUrl : `pmtiles://${archiveUrl}`;
 }
 
 /**
@@ -164,9 +174,12 @@ export function layerIdsForTheme(theme: OvertureTheme): string[] {
  * @returns The matching paint property, e.g. `fill-opacity`
  */
 export function opacityPropertyForLayerType(
-  layerType: 'fill' | 'line' | 'circle'
-): 'fill-opacity' | 'line-opacity' | 'circle-opacity' {
-  return `${layerType}-opacity` as 'fill-opacity' | 'line-opacity' | 'circle-opacity';
+  layerType: "fill" | "line" | "circle",
+): "fill-opacity" | "line-opacity" | "circle-opacity" {
+  return `${layerType}-opacity` as
+    | "fill-opacity"
+    | "line-opacity"
+    | "circle-opacity";
 }
 
 /**
@@ -176,9 +189,9 @@ export function opacityPropertyForLayerType(
  * @returns The matching paint property, e.g. `fill-color`
  */
 export function colorPropertyForLayerType(
-  layerType: 'fill' | 'line' | 'circle'
-): 'fill-color' | 'line-color' | 'circle-color' {
-  return `${layerType}-color` as 'fill-color' | 'line-color' | 'circle-color';
+  layerType: "fill" | "line" | "circle",
+): "fill-color" | "line-color" | "circle-color" {
+  return `${layerType}-color` as "fill-color" | "line-color" | "circle-color";
 }
 
 /**
@@ -190,10 +203,10 @@ export function colorPropertyForLayerType(
  * @returns The matching paint property, or null for fills
  */
 export function sizePropertyForLayerType(
-  layerType: 'fill' | 'line' | 'circle'
-): 'circle-radius' | 'line-width' | null {
-  if (layerType === 'circle') return 'circle-radius';
-  if (layerType === 'line') return 'line-width';
+  layerType: "fill" | "line" | "circle",
+): "circle-radius" | "line-width" | null {
+  if (layerType === "circle") return "circle-radius";
+  if (layerType === "line") return "line-width";
   return null;
 }
 
@@ -204,8 +217,8 @@ export function sizePropertyForLayerType(
  * @returns The default size in pixels
  */
 export function defaultSizeForGeometry(geometry: OvertureGeometry): number {
-  if (geometry === 'point') return 3;
-  if (geometry === 'line') return 1;
+  if (geometry === "point") return 3;
+  if (geometry === "line") return 1;
   return 0.8;
 }
 
@@ -218,9 +231,11 @@ export function defaultSizeForGeometry(geometry: OvertureGeometry): number {
  */
 export function findLayerDef(
   theme: OvertureTheme,
-  sourceLayer: string
+  sourceLayer: string,
 ): OvertureLayerDef | undefined {
-  return THEMES[theme].layers.find((layer) => layer.sourceLayer === sourceLayer);
+  return THEMES[theme].layers.find(
+    (layer) => layer.sourceLayer === sourceLayer,
+  );
 }
 
 /** Fill layers are kept translucent relative to the theme opacity for an x-ray look. */
@@ -233,8 +248,11 @@ export const FILL_OPACITY_RATIO = 0.3;
  * @param opacity - The theme opacity (0..1)
  * @returns The opacity value to apply to the layer's paint property
  */
-export function effectiveOpacity(layerType: 'fill' | 'line' | 'circle', opacity: number): number {
-  return layerType === 'fill' ? opacity * FILL_OPACITY_RATIO : opacity;
+export function effectiveOpacity(
+  layerType: "fill" | "line" | "circle",
+  opacity: number,
+): number {
+  return layerType === "fill" ? opacity * FILL_OPACITY_RATIO : opacity;
 }
 
 /**
@@ -251,12 +269,14 @@ export function effectiveOpacity(layerType: 'fill' | 'line' | 'circle', opacity:
 export function buildLayerSpecs(
   theme: OvertureTheme,
   opacity: number,
-  color?: string
+  color?: string,
 ): LayerSpecification[] {
   const def = THEMES[theme];
   const themeColor = color ?? def.color;
   const sourceId = sourceIdForTheme(theme);
-  return def.layers.flatMap((layer) => specsForLayer(sourceId, layer, opacity, themeColor));
+  return def.layers.flatMap((layer) =>
+    specsForLayer(sourceId, layer, opacity, themeColor),
+  );
 }
 
 /**
@@ -276,7 +296,7 @@ export function buildSourceLayerSpecs(
   sourceLayer: string,
   opacity: number,
   color?: string,
-  size?: number
+  size?: number,
 ): LayerSpecification[] {
   const layer = findLayerDef(theme, sourceLayer);
   if (!layer) {
@@ -287,7 +307,7 @@ export function buildSourceLayerSpecs(
     layer,
     opacity,
     color ?? THEMES[theme].color,
-    size
+    size,
   );
 }
 
@@ -298,7 +318,10 @@ export function buildSourceLayerSpecs(
  * @param sourceLayer - The source-layer name
  * @returns Layer ids in the order they are added to the map
  */
-export function layerIdsForSourceLayer(theme: OvertureTheme, sourceLayer: string): string[] {
+export function layerIdsForSourceLayer(
+  theme: OvertureTheme,
+  sourceLayer: string,
+): string[] {
   return buildSourceLayerSpecs(theme, sourceLayer, 1).map((spec) => spec.id);
 }
 
@@ -316,48 +339,48 @@ function specsForLayer(
   layer: OvertureLayerDef,
   opacity: number,
   color: string,
-  size?: number
+  size?: number,
 ): LayerSpecification[] {
   const idBase = `${sourceId}-${layer.sourceLayer}`;
   const px = size ?? defaultSizeForGeometry(layer.geometry);
 
-  if (layer.geometry === 'polygon') {
+  if (layer.geometry === "polygon") {
     return [
       {
         id: `${idBase}-fill`,
-        type: 'fill',
+        type: "fill",
         source: sourceId,
-        'source-layer': layer.sourceLayer,
+        "source-layer": layer.sourceLayer,
         paint: {
-          'fill-color': color,
-          'fill-opacity': effectiveOpacity('fill', opacity),
+          "fill-color": color,
+          "fill-opacity": effectiveOpacity("fill", opacity),
         },
       },
       {
         id: `${idBase}-line`,
-        type: 'line',
+        type: "line",
         source: sourceId,
-        'source-layer': layer.sourceLayer,
+        "source-layer": layer.sourceLayer,
         paint: {
-          'line-color': color,
-          'line-width': px,
-          'line-opacity': effectiveOpacity('line', opacity),
+          "line-color": color,
+          "line-width": px,
+          "line-opacity": effectiveOpacity("line", opacity),
         },
       },
     ];
   }
 
-  if (layer.geometry === 'line') {
+  if (layer.geometry === "line") {
     return [
       {
         id: `${idBase}-line`,
-        type: 'line',
+        type: "line",
         source: sourceId,
-        'source-layer': layer.sourceLayer,
+        "source-layer": layer.sourceLayer,
         paint: {
-          'line-color': color,
-          'line-width': px,
-          'line-opacity': effectiveOpacity('line', opacity),
+          "line-color": color,
+          "line-width": px,
+          "line-opacity": effectiveOpacity("line", opacity),
         },
       },
     ];
@@ -366,16 +389,16 @@ function specsForLayer(
   return [
     {
       id: `${idBase}-circle`,
-      type: 'circle',
+      type: "circle",
       source: sourceId,
-      'source-layer': layer.sourceLayer,
+      "source-layer": layer.sourceLayer,
       paint: {
-        'circle-color': color,
-        'circle-radius': px,
-        'circle-opacity': effectiveOpacity('circle', opacity),
-        'circle-stroke-width': 0.5,
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-opacity': effectiveOpacity('circle', opacity),
+        "circle-color": color,
+        "circle-radius": px,
+        "circle-opacity": effectiveOpacity("circle", opacity),
+        "circle-stroke-width": 0.5,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-opacity": effectiveOpacity("circle", opacity),
       },
     },
   ];

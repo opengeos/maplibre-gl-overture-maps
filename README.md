@@ -141,6 +141,9 @@ The main control class implementing MapLibre's `IControl` interface.
 | `visibleThemes` | `OvertureTheme[]`             | `['buildings', 'transportation', 'places']`   | Themes that start visible                                                 |
 | `themeColors`   | `Partial<Record<OvertureTheme, string>>` | x-ray palette                       | Per-theme color overrides                                                 |
 | `themeOpacity`  | `Partial<Record<OvertureTheme, number>>` | `0.8`                               | Per-theme initial opacity (0..1)                                          |
+| `onExport`      | `(filename, data) => void`    | browser download                              | Custom handler for the GeoJSON export (e.g. a native save dialog)         |
+| `nativePmtiles` | `boolean`                     | `false`                                       | Emit plain `https://` archive URLs and skip `addProtocol`, for an engine that reads `.pmtiles` natively (Mapbox GL JS 3.30+) |
+| `createPopup`   | `(options) => OverturePopup`  | MapLibre `Popup`                              | Factory for the inspection popup, e.g. mapbox-gl's `Popup` on a Mapbox map |
 
 #### Methods
 
@@ -357,6 +360,7 @@ docker run -p 8080:80 maplibre-gl-overture-maps
 - Overture tiles are designed for x-ray inspection, not as a production basemap. See the [Overture tiles docs](https://docs.overturemaps.org/examples/overture-tiles/).
 - The `addresses` and `places` themes only contain features at zoom 14 and above.
 - If the release list cannot be fetched (e.g. offline), the control falls back to a known release and emits an `error` event; pin a release with the `release` option to skip the fetch dependency.
+- The control only uses the Style Spec surface MapLibre and Mapbox GL JS share, so it can be mounted on a mapbox-gl map (3.30+, which reads `.pmtiles` archives natively) with `nativePmtiles: true` and `createPopup: (options) => new mapboxgl.Popup(options)`.
 
 ## License
 

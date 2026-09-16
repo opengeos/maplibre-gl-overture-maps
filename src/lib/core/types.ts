@@ -1,6 +1,6 @@
-import type { FeatureCollection } from 'geojson';
-import type { Map } from 'maplibre-gl';
-import type { OvertureTheme } from './themes';
+import type { FeatureCollection } from "geojson";
+import type { Map } from "maplibre-gl";
+import type { OvertureTheme } from "./themes";
 
 /**
  * UI color scheme for the control.
@@ -9,7 +9,7 @@ import type { OvertureTheme } from './themes';
  * - `'dark'` forces dark colors
  * - `'auto'` follows the browser's `prefers-color-scheme`
  */
-export type ControlColorScheme = 'light' | 'dark' | 'auto';
+export type ControlColorScheme = "light" | "dark" | "auto";
 
 /**
  * Options for configuring the OvertureMapsControl
@@ -25,7 +25,7 @@ export interface OvertureMapsControlOptions {
    * Position of the control on the map
    * @default 'top-right'
    */
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
   /**
    * Title displayed in the control header
@@ -108,6 +108,53 @@ export interface OvertureMapsControlOptions {
    * @param data - The exported FeatureCollection
    */
   onExport?: (filename: string, data: FeatureCollection) => void;
+
+  /**
+   * Whether the host map reads `.pmtiles` archives natively from a plain
+   * `https://` URL, so the control emits the archive URL as-is and skips
+   * registering MapLibre's `pmtiles://` protocol. Set it when the control is
+   * mounted on an engine with a built-in PMTiles tile provider, such as
+   * Mapbox GL JS 3.30+, where `maplibregl.addProtocol` has no effect.
+   * @default false
+   */
+  nativePmtiles?: boolean;
+
+  /**
+   * Factory for the feature-inspection popup. When provided, it is called
+   * instead of constructing MapLibre's `Popup`, letting a host mount the
+   * control on a map engine that ships its own popup class (for example
+   * mapbox-gl's `Popup`, which shares the same fluent surface).
+   *
+   * @param options - The popup options the control would pass to MapLibre
+   * @returns A popup exposing `setLngLat`, `setDOMContent`, `addTo` and `remove`
+   */
+  createPopup?: (options: OverturePopupOptions) => OverturePopup;
+}
+
+/**
+ * Options the control hands to {@link OvertureMapsControlOptions.createPopup}.
+ * A subset of MapLibre's `PopupOptions` that mapbox-gl's `Popup` accepts too.
+ */
+export interface OverturePopupOptions {
+  /** CSS max-width of the popup, e.g. `'320px'` */
+  maxWidth?: string;
+  /** Extra class name(s) added to the popup container */
+  className?: string;
+}
+
+/**
+ * The popup surface the control drives: the fluent members shared by
+ * MapLibre's and mapbox-gl's `Popup` classes.
+ */
+export interface OverturePopup {
+  /** Positions the popup at a geographic location */
+  setLngLat(lngLat: { lng: number; lat: number } | [number, number]): this;
+  /** Replaces the popup body with a DOM node */
+  setDOMContent(node: Node): this;
+  /** Attaches the popup to the map the control is mounted on */
+  addTo(map: unknown): this;
+  /** Detaches the popup from the map */
+  remove(): this;
 }
 
 /**
@@ -193,12 +240,12 @@ export interface OvertureMapsControlReactProps extends OvertureMapsControlOption
  * Event types emitted by the Overture Maps control
  */
 export type OvertureMapsEvent =
-  | 'collapse'
-  | 'expand'
-  | 'statechange'
-  | 'releasechange'
-  | 'themechange'
-  | 'error';
+  | "collapse"
+  | "expand"
+  | "statechange"
+  | "releasechange"
+  | "themechange"
+  | "error";
 
 /**
  * Event handler function type

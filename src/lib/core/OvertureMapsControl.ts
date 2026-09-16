@@ -1,6 +1,6 @@
-import type { IControl, Map as MapLibreMap, MapMouseEvent, Popup } from 'maplibre-gl';
-import type { FeatureCollection } from 'geojson';
-import { getMapLibre } from './maplibre';
+import type { IControl, Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
+import type { FeatureCollection } from "geojson";
+import { getMapLibre } from "./maplibre";
 import type {
   OvertureMapsControlOptions,
   OvertureMapsState,
@@ -8,7 +8,8 @@ import type {
   OvertureMapsEventHandler,
   OvertureThemeState,
   OvertureLayerState,
-} from './types';
+  OverturePopup,
+} from "./types";
 import {
   THEMES,
   THEME_IDS,
@@ -23,15 +24,15 @@ import {
   effectiveOpacity,
   sourceIdForTheme,
   tileUrlForTheme,
-} from './themes';
-import type { OvertureTheme } from './themes';
+} from "./themes";
+import type { OvertureTheme } from "./themes";
 import {
   DEFAULT_RELEASES_URL,
   DEFAULT_TILES_BASE_URL,
   FALLBACK_RELEASE,
   fetchReleases,
-} from './releases';
-import { ensurePmtilesProtocol } from './pmtilesProtocol';
+} from "./releases";
+import { ensurePmtilesProtocol } from "./pmtilesProtocol";
 
 /**
  * Default options for the OvertureMapsControl
@@ -39,28 +40,30 @@ import { ensurePmtilesProtocol } from './pmtilesProtocol';
 const DEFAULT_OPTIONS: Required<
   Omit<
     OvertureMapsControlOptions,
-    'release' | 'themeColors' | 'themeOpacity' | 'onExport'
+    "release" | "themeColors" | "themeOpacity" | "onExport" | "createPopup"
   >
 > &
   Pick<
     OvertureMapsControlOptions,
-    'release' | 'themeColors' | 'themeOpacity' | 'onExport'
+    "release" | "themeColors" | "themeOpacity" | "onExport" | "createPopup"
   > = {
   collapsed: true,
-  position: 'top-right',
-  title: 'Overture Maps',
+  position: "top-right",
+  title: "Overture Maps",
   panelWidth: 300,
-  className: '',
-  theme: 'auto',
+  className: "",
+  theme: "auto",
   release: undefined,
   releasesUrl: DEFAULT_RELEASES_URL,
   tilesBaseUrl: DEFAULT_TILES_BASE_URL,
   inspect: true,
   exportMinZoom: 12,
-  visibleThemes: ['buildings', 'transportation', 'places'],
+  visibleThemes: ["buildings", "transportation", "places"],
   themeColors: undefined,
   themeOpacity: undefined,
   onExport: undefined,
+  nativePmtiles: false,
+  createPopup: undefined,
 };
 
 const DEFAULT_OPACITY = 0.8;
@@ -74,7 +77,10 @@ const MAX_PANEL_WIDTH = 600;
 /**
  * Event handlers map type
  */
-type EventHandlersMap = globalThis.Map<OvertureMapsEvent, Set<OvertureMapsEventHandler>>;
+type EventHandlersMap = globalThis.Map<
+  OvertureMapsEvent,
+  Set<OvertureMapsEventHandler>
+>;
 
 /**
  * A MapLibre GL control for visualizing Overture Maps PMTiles themes.
@@ -100,7 +106,7 @@ export class OvertureMapsControl implements IControl {
   private _options: typeof DEFAULT_OPTIONS;
   private _state: OvertureMapsState;
   private _eventHandlers: EventHandlersMap = new globalThis.Map();
-  private _popup?: Popup;
+  private _popup?: OverturePopup;
   private _releaseSelect?: HTMLSelectElement;
   private _errorEl?: HTMLElement;
   private _noticeEl?: HTMLElement;
@@ -166,7 +172,7 @@ export class OvertureMapsControl implements IControl {
     this._state = {
       collapsed: this._options.collapsed,
       panelWidth: this._options.panelWidth,
-      release: this._options.release ?? '',
+      release: this._options.release ?? "",
       releases: this._options.release ? [this._options.release] : [],
       themes,
       inspect: this._options.inspect,
@@ -184,7 +190,11 @@ export class OvertureMapsControl implements IControl {
   onAdd(map: MapLibreMap): HTMLElement {
     this._map = map;
     this._mapContainer = map.getContainer();
-    ensurePmtilesProtocol();
+    // A host whose engine reads `.pmtiles` archives itself (mapbox-gl 3.30+)
+    // gets plain https URLs instead, and MapLibre's protocol is never touched.
+    if (!this._options.nativePmtiles) {
+      ensurePmtilesProtocol();
+    }
 
     this._container = this._createContainer();
     this._panel = this._createPanel();
@@ -201,12 +211,12 @@ export class OvertureMapsControl implements IControl {
     // would silently disappear after a basemap change. _applyRelease() is a
     // no-op until a release has resolved, so the initial load is unaffected.
     this._styleLoadHandler = () => this._applyRelease();
-    this._map.on('style.load', this._styleLoadHandler);
+    this._map.on("style.load", this._styleLoadHandler);
 
     // Update the zoom hint as the map zoom crosses the detail-theme threshold,
     // so a satisfied heads-up does not linger as an outdated warning.
     this._zoomHandler = () => this._updateHint();
-    this._map.on('zoom', this._zoomHandler);
+    this._map.on("zoom", this._zoomHandler);
 
     // Follow the system color scheme live when theme is 'auto'
     this._setupSchemeListener();
@@ -218,7 +228,7 @@ export class OvertureMapsControl implements IControl {
 
     // Set initial panel state
     if (!this._state.collapsed) {
-      this._panel.classList.add('expanded');
+      this._panel.classList.add("expanded");
       // Update position after control is added to DOM
       requestAnimationFrame(() => {
         this._updatePanelPosition();
@@ -247,7 +257,7 @@ export class OvertureMapsControl implements IControl {
 
     // Remove the system color-scheme listener
     if (this._schemeMedia && this._schemeListener) {
-      this._schemeMedia.removeEventListener('change', this._schemeListener);
+      this._schemeMedia.removeEventListener("change", this._schemeListener);
     }
     this._schemeMedia = null;
     this._schemeListener = null;
@@ -257,33 +267,33 @@ export class OvertureMapsControl implements IControl {
 
     // Remove any in-progress panel resize listeners
     if (this._resizePointerMove) {
-      document.removeEventListener('pointermove', this._resizePointerMove);
+      document.removeEventListener("pointermove", this._resizePointerMove);
       this._resizePointerMove = null;
     }
     if (this._resizePointerUp) {
-      document.removeEventListener('pointerup', this._resizePointerUp);
+      document.removeEventListener("pointerup", this._resizePointerUp);
       this._resizePointerUp = null;
     }
 
     // Remove event listeners
     if (this._resizeHandler) {
-      window.removeEventListener('resize', this._resizeHandler);
+      window.removeEventListener("resize", this._resizeHandler);
       this._resizeHandler = null;
     }
     if (this._mapResizeHandler && this._map) {
-      this._map.off('resize', this._mapResizeHandler);
+      this._map.off("resize", this._mapResizeHandler);
       this._mapResizeHandler = null;
     }
     if (this._styleLoadHandler && this._map) {
-      this._map.off('style.load', this._styleLoadHandler);
+      this._map.off("style.load", this._styleLoadHandler);
       this._styleLoadHandler = null;
     }
     if (this._zoomHandler && this._map) {
-      this._map.off('zoom', this._zoomHandler);
+      this._map.off("zoom", this._zoomHandler);
       this._zoomHandler = null;
     }
     if (this._clickOutsideHandler) {
-      document.removeEventListener('click', this._clickOutsideHandler);
+      document.removeEventListener("click", this._clickOutsideHandler);
       this._clickOutsideHandler = null;
     }
 
@@ -325,7 +335,7 @@ export class OvertureMapsControl implements IControl {
    */
   setState(newState: Partial<OvertureMapsState>): void {
     this._state = { ...this._state, ...newState };
-    this._emit('statechange');
+    this._emit("statechange");
   }
 
   /**
@@ -336,10 +346,10 @@ export class OvertureMapsControl implements IControl {
 
     if (this._panel) {
       if (this._state.collapsed) {
-        this._panel.classList.remove('expanded');
-        this._emit('collapse');
+        this._panel.classList.remove("expanded");
+        this._emit("collapse");
       } else {
-        this._panel.classList.add('expanded');
+        this._panel.classList.add("expanded");
         this._updatePanelPosition();
         // Ignore the click event currently being dispatched (if any) so
         // a programmatic expand isn't undone by the click-outside handler
@@ -347,11 +357,11 @@ export class OvertureMapsControl implements IControl {
         setTimeout(() => {
           this._suppressClickOutside = false;
         }, 0);
-        this._emit('expand');
+        this._emit("expand");
       }
     }
 
-    this._emit('statechange');
+    this._emit("statechange");
   }
 
   /**
@@ -431,8 +441,8 @@ export class OvertureMapsControl implements IControl {
       this._releaseSelect.value = release;
     }
     this._applyRelease();
-    this._emit('releasechange');
-    this._emit('statechange');
+    this._emit("releasechange");
+    this._emit("statechange");
   }
 
   /**
@@ -464,8 +474,8 @@ export class OvertureMapsControl implements IControl {
       return;
     }
     this._syncThemeGroup(theme);
-    this._emit('themechange');
-    this._emit('statechange');
+    this._emit("themechange");
+    this._emit("statechange");
   }
 
   /**
@@ -491,7 +501,11 @@ export class OvertureMapsControl implements IControl {
    * @param sourceLayer - The source-layer name
    * @param visible - Whether the layer should be rendered
    */
-  setLayerVisible(theme: OvertureTheme, sourceLayer: string, visible: boolean): void {
+  setLayerVisible(
+    theme: OvertureTheme,
+    sourceLayer: string,
+    visible: boolean,
+  ): void {
     const layerState = this._state.themes[theme]?.layers[sourceLayer];
     if (!layerState || layerState.visible === visible) {
       return;
@@ -503,8 +517,8 @@ export class OvertureMapsControl implements IControl {
       this._removeLayer(theme, sourceLayer);
     }
     this._syncThemeGroup(theme);
-    this._emit('themechange');
-    this._emit('statechange');
+    this._emit("themechange");
+    this._emit("statechange");
   }
 
   /**
@@ -514,7 +528,11 @@ export class OvertureMapsControl implements IControl {
    * @param sourceLayer - The source-layer name
    * @param opacity - Opacity value between 0 and 1
    */
-  setLayerOpacity(theme: OvertureTheme, sourceLayer: string, opacity: number): void {
+  setLayerOpacity(
+    theme: OvertureTheme,
+    sourceLayer: string,
+    opacity: number,
+  ): void {
     const layerState = this._state.themes[theme]?.layers[sourceLayer];
     if (!layerState) {
       return;
@@ -523,21 +541,26 @@ export class OvertureMapsControl implements IControl {
     layerState.opacity = clamped;
 
     if (this._map && layerState.visible) {
-      for (const spec of buildSourceLayerSpecs(theme, sourceLayer, clamped, layerState.color)) {
+      for (const spec of buildSourceLayerSpecs(
+        theme,
+        sourceLayer,
+        clamped,
+        layerState.color,
+      )) {
         if (this._map.getLayer(spec.id)) {
-          const layerType = spec.type as 'fill' | 'line' | 'circle';
+          const layerType = spec.type as "fill" | "line" | "circle";
           this._map.setPaintProperty(
             spec.id,
             opacityPropertyForLayerType(layerType),
-            effectiveOpacity(layerType, clamped)
+            effectiveOpacity(layerType, clamped),
           );
         }
       }
     }
 
     this._syncLayerRow(theme, sourceLayer);
-    this._emit('themechange');
-    this._emit('statechange');
+    this._emit("themechange");
+    this._emit("statechange");
   }
 
   /**
@@ -547,7 +570,11 @@ export class OvertureMapsControl implements IControl {
    * @param sourceLayer - The source-layer name
    * @param color - A CSS color string (hex)
    */
-  setLayerColor(theme: OvertureTheme, sourceLayer: string, color: string): void {
+  setLayerColor(
+    theme: OvertureTheme,
+    sourceLayer: string,
+    color: string,
+  ): void {
     const layerState = this._state.themes[theme]?.layers[sourceLayer];
     if (!layerState) {
       return;
@@ -555,17 +582,26 @@ export class OvertureMapsControl implements IControl {
     layerState.color = color;
 
     if (this._map && layerState.visible) {
-      for (const spec of buildSourceLayerSpecs(theme, sourceLayer, layerState.opacity, color)) {
+      for (const spec of buildSourceLayerSpecs(
+        theme,
+        sourceLayer,
+        layerState.opacity,
+        color,
+      )) {
         if (this._map.getLayer(spec.id)) {
-          const layerType = spec.type as 'fill' | 'line' | 'circle';
-          this._map.setPaintProperty(spec.id, colorPropertyForLayerType(layerType), color);
+          const layerType = spec.type as "fill" | "line" | "circle";
+          this._map.setPaintProperty(
+            spec.id,
+            colorPropertyForLayerType(layerType),
+            color,
+          );
         }
       }
     }
 
     this._syncLayerRow(theme, sourceLayer);
-    this._emit('themechange');
-    this._emit('statechange');
+    this._emit("themechange");
+    this._emit("statechange");
   }
 
   /**
@@ -590,10 +626,10 @@ export class OvertureMapsControl implements IControl {
         sourceLayer,
         layerState.opacity,
         layerState.color,
-        clamped
+        clamped,
       )) {
         if (this._map.getLayer(spec.id)) {
-          const layerType = spec.type as 'fill' | 'line' | 'circle';
+          const layerType = spec.type as "fill" | "line" | "circle";
           const property = sizePropertyForLayerType(layerType);
           if (property) {
             this._map.setPaintProperty(spec.id, property, clamped);
@@ -603,8 +639,8 @@ export class OvertureMapsControl implements IControl {
     }
 
     this._syncLayerRow(theme, sourceLayer);
-    this._emit('themechange');
-    this._emit('statechange');
+    this._emit("themechange");
+    this._emit("statechange");
   }
 
   /**
@@ -620,7 +656,7 @@ export class OvertureMapsControl implements IControl {
     }
     themeState.expanded = expanded;
     this._syncThemeGroup(theme);
-    this._emit('statechange');
+    this._emit("statechange");
   }
 
   /**
@@ -641,7 +677,7 @@ export class OvertureMapsControl implements IControl {
     if (this._inspectCheckbox) {
       this._inspectCheckbox.checked = enabled;
     }
-    this._emit('statechange');
+    this._emit("statechange");
   }
 
   /**
@@ -658,31 +694,36 @@ export class OvertureMapsControl implements IControl {
    */
   getRenderedLayerGeoJSON(
     theme: OvertureTheme,
-    sourceLayer: string
+    sourceLayer: string,
   ): FeatureCollection {
-    const collection: FeatureCollection = { type: 'FeatureCollection', features: [] };
+    const collection: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [],
+    };
     if (!this._map) {
       return collection;
     }
     const layerIds = layerIdsForSourceLayer(theme, sourceLayer).filter((id) =>
-      this._map!.getLayer(id)
+      this._map!.getLayer(id),
     );
     if (!layerIds.length) {
       return collection;
     }
 
     const seen = new Set<string>();
-    for (const feature of this._map.queryRenderedFeatures({ layers: layerIds })) {
+    for (const feature of this._map.queryRenderedFeatures({
+      layers: layerIds,
+    })) {
       const key =
         feature.id != null
-          ? `${feature.sourceLayer ?? ''}:${feature.id}`
+          ? `${feature.sourceLayer ?? ""}:${feature.id}`
           : JSON.stringify([feature.geometry, feature.properties]);
       if (seen.has(key)) {
         continue;
       }
       seen.add(key);
       collection.features.push({
-        type: 'Feature',
+        type: "Feature",
         geometry: feature.geometry,
         properties: feature.properties ?? {},
       });
@@ -699,7 +740,10 @@ export class OvertureMapsControl implements IControl {
    * @param sourceLayer - The source-layer name
    * @returns The exported FeatureCollection, or null when nothing was exported
    */
-  exportLayer(theme: OvertureTheme, sourceLayer: string): FeatureCollection | null {
+  exportLayer(
+    theme: OvertureTheme,
+    sourceLayer: string,
+  ): FeatureCollection | null {
     if (!this._map) {
       return null;
     }
@@ -711,7 +755,8 @@ export class OvertureMapsControl implements IControl {
     }
     // Coalesce in case a caller passed `exportMinZoom: undefined`, which the
     // options merge would otherwise leave undefined and bypass the gate.
-    const minZoom = this._options.exportMinZoom ?? DEFAULT_OPTIONS.exportMinZoom;
+    const minZoom =
+      this._options.exportMinZoom ?? DEFAULT_OPTIONS.exportMinZoom;
     if (this._map.getZoom() < minZoom) {
       this._notify(`Zoom in (level ${minZoom}+) to export ${label}.`);
       return null;
@@ -733,7 +778,7 @@ export class OvertureMapsControl implements IControl {
       } catch (error) {
         this._notify(`Failed to export ${label}.`);
         this._setError(
-          `Export failed (${error instanceof Error ? error.message : 'unknown error'}).`
+          `Export failed (${error instanceof Error ? error.message : "unknown error"}).`,
         );
         return null;
       }
@@ -741,7 +786,9 @@ export class OvertureMapsControl implements IControl {
       this._downloadGeoJSON(filename, collection);
     }
     const count = collection.features.length;
-    this._notify(`Exported ${count} ${label} feature${count === 1 ? '' : 's'}.`);
+    this._notify(
+      `Exported ${count} ${label} feature${count === 1 ? "" : "s"}.`,
+    );
     return collection;
   }
 
@@ -752,9 +799,11 @@ export class OvertureMapsControl implements IControl {
    * @param data - The GeoJSON object to serialize
    */
   private _downloadGeoJSON(filename: string, data: FeatureCollection): void {
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/geo+json' });
+    const blob = new Blob([JSON.stringify(data)], {
+      type: "application/geo+json",
+    });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
+    const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = filename;
     document.body.appendChild(anchor);
@@ -782,7 +831,7 @@ export class OvertureMapsControl implements IControl {
     if (message) {
       this._noticeTimer = setTimeout(() => {
         if (this._noticeEl) {
-          this._noticeEl.textContent = '';
+          this._noticeEl.textContent = "";
         }
         this._noticeTimer = null;
       }, 5000);
@@ -801,7 +850,7 @@ export class OvertureMapsControl implements IControl {
       this._state.release = latest;
     }
     this._renderReleaseOptions();
-    this._emit('statechange');
+    this._emit("statechange");
     return releases;
   }
 
@@ -850,8 +899,8 @@ export class OvertureMapsControl implements IControl {
       }
       this._setError(
         `Could not load the Overture release list (${
-          error instanceof Error ? error.message : 'unknown error'
-        }). Using ${this._state.release}.`
+          error instanceof Error ? error.message : "unknown error"
+        }). Using ${this._state.release}.`,
       );
     }
     this._applyRelease();
@@ -865,11 +914,11 @@ export class OvertureMapsControl implements IControl {
   private _setError(message: string | null): void {
     this._state.error = message;
     if (this._errorEl) {
-      this._errorEl.textContent = message ?? '';
-      this._errorEl.style.display = message ? 'block' : 'none';
+      this._errorEl.textContent = message ?? "";
+      this._errorEl.style.display = message ? "block" : "none";
     }
     if (message) {
-      this._emit('error');
+      this._emit("error");
     }
   }
 
@@ -904,8 +953,13 @@ export class OvertureMapsControl implements IControl {
     const sourceId = sourceIdForTheme(theme);
     if (!this._map.getSource(sourceId)) {
       this._map.addSource(sourceId, {
-        type: 'vector',
-        url: tileUrlForTheme(this._options.tilesBaseUrl, this._state.release, theme),
+        type: "vector",
+        url: tileUrlForTheme(
+          this._options.tilesBaseUrl,
+          this._state.release,
+          theme,
+          this._options.nativePmtiles,
+        ),
       });
     }
   }
@@ -927,7 +981,7 @@ export class OvertureMapsControl implements IControl {
       sourceLayer,
       layerState.opacity,
       layerState.color,
-      layerState.size
+      layerState.size,
     )) {
       if (!this._map.getLayer(spec.id)) {
         // Insert at the position that keeps the THEME_IDS draw order
@@ -992,7 +1046,9 @@ export class OvertureMapsControl implements IControl {
       }
     }
     const sourceId = sourceIdForTheme(theme);
-    const stillUsed = layerIdsForTheme(theme).some((id) => this._map?.getLayer(id));
+    const stillUsed = layerIdsForTheme(theme).some((id) =>
+      this._map?.getLayer(id),
+    );
     if (!stillUsed && this._map.getSource(sourceId)) {
       this._map.removeSource(sourceId);
     }
@@ -1062,24 +1118,40 @@ export class OvertureMapsControl implements IControl {
 
       const feature = features[0];
       this._popup?.remove();
-      this._popup = new (getMapLibre().Popup)({
-        maxWidth: '320px',
-        className: 'overture-popup',
-      })
+      this._popup = this._createPopup()
         .setLngLat(e.lngLat)
-        .setDOMContent(this._buildPopupContent(feature.sourceLayer ?? '', feature.properties ?? {}))
+        .setDOMContent(
+          this._buildPopupContent(
+            feature.sourceLayer ?? "",
+            feature.properties ?? {},
+          ),
+        )
         .addTo(this._map);
     };
-    this._map.on('click', this._clickHandler);
+    this._map.on("click", this._clickHandler);
 
     this._moveHandler = (e: MapMouseEvent) => {
       if (!this._map) return;
       const layers = this._renderedLayerIds();
       if (!layers.length) return;
       const features = this._map.queryRenderedFeatures(e.point, { layers });
-      this._map.getCanvas().style.cursor = features.length ? 'pointer' : '';
+      this._map.getCanvas().style.cursor = features.length ? "pointer" : "";
     };
-    this._map.on('mousemove', this._moveHandler);
+    this._map.on("mousemove", this._moveHandler);
+  }
+
+  /**
+   * Builds the inspection popup: the host's `createPopup` factory when one is
+   * configured (a map engine with its own popup class), else MapLibre's.
+   *
+   * @returns An unattached popup
+   */
+  private _createPopup(): OverturePopup {
+    const options = { maxWidth: "320px", className: "overture-popup" };
+    if (this._options.createPopup) {
+      return this._options.createPopup(options);
+    }
+    return new (getMapLibre().Popup)(options) as unknown as OverturePopup;
   }
 
   /**
@@ -1087,17 +1159,17 @@ export class OvertureMapsControl implements IControl {
    */
   private _teardownInspect(): void {
     if (this._clickHandler && this._map) {
-      this._map.off('click', this._clickHandler);
+      this._map.off("click", this._clickHandler);
     }
     this._clickHandler = null;
     if (this._moveHandler && this._map) {
-      this._map.off('mousemove', this._moveHandler);
+      this._map.off("mousemove", this._moveHandler);
     }
     this._moveHandler = null;
     this._popup?.remove();
     this._popup = undefined;
     if (this._map) {
-      this._map.getCanvas().style.cursor = '';
+      this._map.getCanvas().style.cursor = "";
     }
   }
 
@@ -1113,10 +1185,14 @@ export class OvertureMapsControl implements IControl {
    */
   private _sanitizeDisplayString(value: unknown, maxLength = 200): string {
     const text =
-      typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value);
+      typeof value === "object" && value !== null
+        ? JSON.stringify(value)
+        : String(value);
     // eslint-disable-next-line no-control-regex
-    const cleaned = text.replace(/[\u0000-\u001f\u007f]/g, '');
-    return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength)}…` : cleaned;
+    const cleaned = text.replace(/[\u0000-\u001f\u007f]/g, "");
+    return cleaned.length > maxLength
+      ? `${cleaned.slice(0, maxLength)}…`
+      : cleaned;
   }
 
   /**
@@ -1128,33 +1204,36 @@ export class OvertureMapsControl implements IControl {
    */
   private _buildPopupContent(
     sourceLayer: string,
-    properties: Record<string, unknown>
+    properties: Record<string, unknown>,
   ): HTMLElement {
-    const wrapper = document.createElement('div');
+    const wrapper = document.createElement("div");
     wrapper.className = `overture-popup-content${this._schemeClass()}`;
 
-    const heading = document.createElement('div');
-    heading.className = 'overture-popup-heading';
-    heading.textContent = this._sanitizeDisplayString(sourceLayer || 'feature', 80);
+    const heading = document.createElement("div");
+    heading.className = "overture-popup-heading";
+    heading.textContent = this._sanitizeDisplayString(
+      sourceLayer || "feature",
+      80,
+    );
     wrapper.appendChild(heading);
 
-    const table = document.createElement('table');
-    table.className = 'overture-popup-table';
+    const table = document.createElement("table");
+    table.className = "overture-popup-table";
     const entries = Object.entries(properties);
     if (!entries.length) {
-      const empty = document.createElement('div');
-      empty.className = 'overture-popup-empty';
-      empty.textContent = 'No properties';
+      const empty = document.createElement("div");
+      empty.className = "overture-popup-empty";
+      empty.textContent = "No properties";
       wrapper.appendChild(empty);
       return wrapper;
     }
     for (const [key, value] of entries) {
-      const row = document.createElement('tr');
-      const keyCell = document.createElement('td');
-      keyCell.className = 'overture-popup-key';
+      const row = document.createElement("tr");
+      const keyCell = document.createElement("td");
+      keyCell.className = "overture-popup-key";
       keyCell.textContent = this._sanitizeDisplayString(key, 80);
-      const valueCell = document.createElement('td');
-      valueCell.className = 'overture-popup-value';
+      const valueCell = document.createElement("td");
+      valueCell.className = "overture-popup-value";
       valueCell.textContent = this._sanitizeDisplayString(value);
       row.appendChild(keyCell);
       row.appendChild(valueCell);
@@ -1169,9 +1248,9 @@ export class OvertureMapsControl implements IControl {
    */
   private _prefersDark(): boolean {
     return (
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
     );
   }
 
@@ -1181,10 +1260,10 @@ export class OvertureMapsControl implements IControl {
    *
    * @returns The resolved scheme
    */
-  private _resolvedScheme(): 'light' | 'dark' {
-    if (this._options.theme === 'light') return 'light';
-    if (this._options.theme === 'dark') return 'dark';
-    return this._prefersDark() ? 'dark' : 'light';
+  private _resolvedScheme(): "light" | "dark" {
+    if (this._options.theme === "light") return "light";
+    if (this._options.theme === "dark") return "dark";
+    return this._prefersDark() ? "dark" : "light";
   }
 
   /**
@@ -1201,7 +1280,7 @@ export class OvertureMapsControl implements IControl {
   private _applyScheme(): void {
     const cls = `ovt-theme-${this._resolvedScheme()}`;
     for (const el of [this._container, this._panel]) {
-      el?.classList.remove('ovt-theme-light', 'ovt-theme-dark');
+      el?.classList.remove("ovt-theme-light", "ovt-theme-dark");
       el?.classList.add(cls);
     }
   }
@@ -1212,15 +1291,15 @@ export class OvertureMapsControl implements IControl {
    */
   private _setupSchemeListener(): void {
     if (
-      this._options.theme !== 'auto' ||
-      typeof window === 'undefined' ||
-      typeof window.matchMedia !== 'function'
+      this._options.theme !== "auto" ||
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
     ) {
       return;
     }
-    this._schemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+    this._schemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
     this._schemeListener = () => this._applyScheme();
-    this._schemeMedia.addEventListener('change', this._schemeListener);
+    this._schemeMedia.addEventListener("change", this._schemeListener);
   }
 
   /**
@@ -1230,16 +1309,16 @@ export class OvertureMapsControl implements IControl {
    * @returns The container element
    */
   private _createContainer(): HTMLElement {
-    const container = document.createElement('div');
+    const container = document.createElement("div");
     container.className = `maplibregl-ctrl maplibregl-ctrl-group overture-control${this._schemeClass()}${
-      this._options.className ? ` ${this._options.className}` : ''
+      this._options.className ? ` ${this._options.className}` : ""
     }`;
 
     // Create toggle button (29x29 to match navigation control)
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'overture-control-toggle';
-    toggleBtn.type = 'button';
-    toggleBtn.setAttribute('aria-label', this._options.title);
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "overture-control-toggle";
+    toggleBtn.type = "button";
+    toggleBtn.setAttribute("aria-label", this._options.title);
     toggleBtn.innerHTML = `
       <span class="overture-control-icon">
         <svg viewBox="0 0 24 24" width="22" height="22" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -1249,7 +1328,7 @@ export class OvertureMapsControl implements IControl {
         </svg>
       </span>
     `;
-    toggleBtn.addEventListener('click', () => this.toggle());
+    toggleBtn.addEventListener("click", () => this.toggle());
 
     container.appendChild(toggleBtn);
 
@@ -1263,56 +1342,56 @@ export class OvertureMapsControl implements IControl {
    * @returns The panel element
    */
   private _createPanel(): HTMLElement {
-    const panel = document.createElement('div');
+    const panel = document.createElement("div");
     panel.className = `overture-control-panel${this._schemeClass()}`;
     panel.style.width = `${this._options.panelWidth}px`;
 
     // Create header with title and close button
-    const header = document.createElement('div');
-    header.className = 'overture-control-header';
+    const header = document.createElement("div");
+    header.className = "overture-control-header";
 
-    const title = document.createElement('span');
-    title.className = 'overture-control-title';
+    const title = document.createElement("span");
+    title.className = "overture-control-title";
     title.textContent = this._options.title;
 
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'overture-control-close';
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', 'Close panel');
-    closeBtn.innerHTML = '&times;';
-    closeBtn.addEventListener('click', () => this.collapse());
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "overture-control-close";
+    closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Close panel");
+    closeBtn.innerHTML = "&times;";
+    closeBtn.addEventListener("click", () => this.collapse());
 
     header.appendChild(title);
     header.appendChild(closeBtn);
 
     // Create content area
-    const content = document.createElement('div');
-    content.className = 'overture-control-content';
+    const content = document.createElement("div");
+    content.className = "overture-control-content";
 
     content.appendChild(this._createReleaseRow());
     content.appendChild(this._createInspectRow());
 
-    this._errorEl = document.createElement('div');
-    this._errorEl.className = 'overture-control-error';
-    this._errorEl.style.display = 'none';
+    this._errorEl = document.createElement("div");
+    this._errorEl.className = "overture-control-error";
+    this._errorEl.style.display = "none";
     content.appendChild(this._errorEl);
 
-    this._noticeEl = document.createElement('div');
-    this._noticeEl.className = 'overture-control-notice';
-    this._noticeEl.setAttribute('role', 'status');
-    this._noticeEl.setAttribute('aria-live', 'polite');
-    this._noticeEl.setAttribute('aria-atomic', 'true');
+    this._noticeEl = document.createElement("div");
+    this._noticeEl.className = "overture-control-notice";
+    this._noticeEl.setAttribute("role", "status");
+    this._noticeEl.setAttribute("aria-live", "polite");
+    this._noticeEl.setAttribute("aria-atomic", "true");
     content.appendChild(this._noticeEl);
 
-    const themeList = document.createElement('div');
-    themeList.className = 'overture-control-themes';
+    const themeList = document.createElement("div");
+    themeList.className = "overture-control-themes";
     for (const theme of THEME_IDS) {
       themeList.appendChild(this._createThemeGroup(theme));
     }
     content.appendChild(themeList);
 
-    const hint = document.createElement('p');
-    hint.className = 'overture-control-hint';
+    const hint = document.createElement("p");
+    hint.className = "overture-control-hint";
     this._hintEl = hint;
     this._updateHint();
     content.appendChild(hint);
@@ -1335,7 +1414,10 @@ export class OvertureMapsControl implements IControl {
    * @returns The detail-theme minimum zoom (defaults to 14)
    */
   private get _detailMinZoom(): number {
-    return Math.max(THEMES.addresses.minzoom ?? 14, THEMES.places.minzoom ?? 14);
+    return Math.max(
+      THEMES.addresses.minzoom ?? 14,
+      THEMES.places.minzoom ?? 14,
+    );
   }
 
   /**
@@ -1352,9 +1434,9 @@ export class OvertureMapsControl implements IControl {
     }
     const threshold = this._detailMinZoom;
     const active = this._map ? this._map.getZoom() >= threshold : false;
-    this._hintEl.classList.toggle('overture-control-hint--active', active);
+    this._hintEl.classList.toggle("overture-control-hint--active", active);
     this._hintEl.textContent = active
-      ? 'Addresses and places active.'
+      ? "Addresses and places active."
       : `Addresses and places appear at zoom ${threshold}+.`;
   }
 
@@ -1364,22 +1446,22 @@ export class OvertureMapsControl implements IControl {
    * @returns The inspect row element
    */
   private _createInspectRow(): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'overture-inspect-row';
+    const row = document.createElement("div");
+    row.className = "overture-inspect-row";
 
-    const label = document.createElement('label');
-    label.className = 'overture-inspect-toggle';
+    const label = document.createElement("label");
+    label.className = "overture-inspect-toggle";
 
-    this._inspectCheckbox = document.createElement('input');
-    this._inspectCheckbox.type = 'checkbox';
-    this._inspectCheckbox.className = 'overture-inspect-checkbox';
+    this._inspectCheckbox = document.createElement("input");
+    this._inspectCheckbox.type = "checkbox";
+    this._inspectCheckbox.className = "overture-inspect-checkbox";
     this._inspectCheckbox.checked = this._state.inspect;
-    this._inspectCheckbox.addEventListener('change', () => {
+    this._inspectCheckbox.addEventListener("change", () => {
       this.setInspect(this._inspectCheckbox!.checked);
     });
 
-    const text = document.createElement('span');
-    text.textContent = 'Inspect features on click';
+    const text = document.createElement("span");
+    text.textContent = "Inspect features on click";
 
     label.appendChild(this._inspectCheckbox);
     label.appendChild(text);
@@ -1393,10 +1475,10 @@ export class OvertureMapsControl implements IControl {
    * @returns The resize handle element
    */
   private _createResizeHandle(): HTMLElement {
-    const handle = document.createElement('div');
-    handle.className = 'overture-resize-handle';
-    handle.setAttribute('aria-hidden', 'true');
-    handle.addEventListener('pointerdown', (e) => this._startResize(e));
+    const handle = document.createElement("div");
+    handle.className = "overture-resize-handle";
+    handle.setAttribute("aria-hidden", "true");
+    handle.addEventListener("pointerdown", (e) => this._startResize(e));
     return handle;
   }
 
@@ -1406,17 +1488,17 @@ export class OvertureMapsControl implements IControl {
    * @returns The release row element
    */
   private _createReleaseRow(): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'overture-release-row';
+    const row = document.createElement("div");
+    row.className = "overture-release-row";
 
-    const label = document.createElement('label');
-    label.className = 'overture-control-label';
-    label.textContent = 'Release';
+    const label = document.createElement("label");
+    label.className = "overture-control-label";
+    label.textContent = "Release";
 
-    this._releaseSelect = document.createElement('select');
-    this._releaseSelect.className = 'overture-release-select';
-    this._releaseSelect.setAttribute('aria-label', 'Overture release');
-    this._releaseSelect.addEventListener('change', () => {
+    this._releaseSelect = document.createElement("select");
+    this._releaseSelect.className = "overture-release-select";
+    this._releaseSelect.setAttribute("aria-label", "Overture release");
+    this._releaseSelect.addEventListener("change", () => {
       if (this._releaseSelect) {
         this.setRelease(this._releaseSelect.value);
       }
@@ -1435,9 +1517,9 @@ export class OvertureMapsControl implements IControl {
     if (!this._releaseSelect) {
       return;
     }
-    this._releaseSelect.innerHTML = '';
+    this._releaseSelect.innerHTML = "";
     for (const release of this._state.releases) {
-      const option = document.createElement('option');
+      const option = document.createElement("option");
       option.value = release;
       option.textContent = release;
       this._releaseSelect.appendChild(option);
@@ -1459,35 +1541,35 @@ export class OvertureMapsControl implements IControl {
     const def = THEMES[theme];
     const themeState = this._state.themes[theme];
 
-    const group = document.createElement('div');
-    group.className = 'overture-theme-group';
+    const group = document.createElement("div");
+    group.className = "overture-theme-group";
     group.dataset.theme = theme;
 
-    const header = document.createElement('div');
-    header.className = 'overture-theme-header';
+    const header = document.createElement("div");
+    header.className = "overture-theme-header";
 
-    const caret = document.createElement('button');
-    caret.type = 'button';
-    caret.className = 'overture-theme-caret';
-    caret.setAttribute('aria-label', `Toggle ${def.label} layers`);
-    caret.setAttribute('aria-expanded', String(themeState.expanded));
-    caret.innerHTML = '&rsaquo;';
-    caret.addEventListener('click', () => {
+    const caret = document.createElement("button");
+    caret.type = "button";
+    caret.className = "overture-theme-caret";
+    caret.setAttribute("aria-label", `Toggle ${def.label} layers`);
+    caret.setAttribute("aria-expanded", String(themeState.expanded));
+    caret.innerHTML = "&rsaquo;";
+    caret.addEventListener("click", () => {
       this.setThemeExpanded(theme, !this._state.themes[theme].expanded);
     });
 
-    const label = document.createElement('label');
-    label.className = 'overture-theme-toggle';
+    const label = document.createElement("label");
+    label.className = "overture-theme-toggle";
 
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'overture-theme-checkbox';
-    checkbox.addEventListener('change', () => {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "overture-theme-checkbox";
+    checkbox.addEventListener("change", () => {
       this.setThemeVisible(theme, checkbox.checked);
     });
 
-    const name = document.createElement('span');
-    name.className = 'overture-theme-name';
+    const name = document.createElement("span");
+    name.className = "overture-theme-name";
     name.textContent = def.label;
 
     label.appendChild(checkbox);
@@ -1496,8 +1578,8 @@ export class OvertureMapsControl implements IControl {
     header.appendChild(caret);
     header.appendChild(label);
 
-    const layers = document.createElement('div');
-    layers.className = 'overture-theme-layers';
+    const layers = document.createElement("div");
+    layers.className = "overture-theme-layers";
     for (const layer of def.layers) {
       layers.appendChild(this._createLayerRow(theme, layer.sourceLayer));
     }
@@ -1518,45 +1600,48 @@ export class OvertureMapsControl implements IControl {
    * @param sourceLayer - The source-layer name
    * @returns The layer row element
    */
-  private _createLayerRow(theme: OvertureTheme, sourceLayer: string): HTMLElement {
+  private _createLayerRow(
+    theme: OvertureTheme,
+    sourceLayer: string,
+  ): HTMLElement {
     const layerState = this._state.themes[theme].layers[sourceLayer];
     const label = this._humanizeLayer(sourceLayer);
 
-    const row = document.createElement('div');
-    row.className = 'overture-layer-row';
+    const row = document.createElement("div");
+    row.className = "overture-layer-row";
     row.dataset.layer = sourceLayer;
 
-    const head = document.createElement('div');
-    head.className = 'overture-layer-head';
+    const head = document.createElement("div");
+    head.className = "overture-layer-head";
 
-    const toggle = document.createElement('label');
-    toggle.className = 'overture-layer-toggle';
+    const toggle = document.createElement("label");
+    toggle.className = "overture-layer-toggle";
 
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'overture-layer-checkbox';
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "overture-layer-checkbox";
     checkbox.checked = layerState.visible;
-    checkbox.addEventListener('change', () => {
+    checkbox.addEventListener("change", () => {
       this.setLayerVisible(theme, sourceLayer, checkbox.checked);
     });
 
-    const swatch = document.createElement('span');
-    swatch.className = 'overture-layer-swatch';
+    const swatch = document.createElement("span");
+    swatch.className = "overture-layer-swatch";
     swatch.style.backgroundColor = layerState.color;
 
-    const name = document.createElement('span');
-    name.className = 'overture-layer-name';
+    const name = document.createElement("span");
+    name.className = "overture-layer-name";
     name.textContent = label;
 
     toggle.appendChild(checkbox);
     toggle.appendChild(swatch);
     toggle.appendChild(name);
 
-    const styleBtn = document.createElement('button');
-    styleBtn.type = 'button';
-    styleBtn.className = 'overture-layer-style-btn';
-    styleBtn.setAttribute('aria-label', `Edit ${label} style`);
-    styleBtn.setAttribute('aria-expanded', 'false');
+    const styleBtn = document.createElement("button");
+    styleBtn.type = "button";
+    styleBtn.className = "overture-layer-style-btn";
+    styleBtn.setAttribute("aria-label", `Edit ${label} style`);
+    styleBtn.setAttribute("aria-expanded", "false");
     styleBtn.innerHTML = `
       <svg viewBox="0 0 24 24" width="14" height="14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="4" y1="8" x2="20" y2="8"/>
@@ -1565,16 +1650,16 @@ export class OvertureMapsControl implements IControl {
         <circle cx="15" cy="16" r="2"/>
       </svg>
     `;
-    styleBtn.addEventListener('click', () => {
-      const open = row.classList.toggle('editing');
-      styleBtn.setAttribute('aria-expanded', String(open));
+    styleBtn.addEventListener("click", () => {
+      const open = row.classList.toggle("editing");
+      styleBtn.setAttribute("aria-expanded", String(open));
     });
 
-    const exportBtn = document.createElement('button');
-    exportBtn.type = 'button';
-    exportBtn.className = 'overture-layer-export-btn';
-    exportBtn.setAttribute('aria-label', `Export ${label} in view to GeoJSON`);
-    exportBtn.title = 'Export features in view to GeoJSON';
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.className = "overture-layer-export-btn";
+    exportBtn.setAttribute("aria-label", `Export ${label} in view to GeoJSON`);
+    exportBtn.title = "Export features in view to GeoJSON";
     exportBtn.disabled = !layerState.visible;
     exportBtn.innerHTML = `
       <svg viewBox="0 0 24 24" width="14" height="14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1583,7 +1668,7 @@ export class OvertureMapsControl implements IControl {
         <line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
     `;
-    exportBtn.addEventListener('click', () => {
+    exportBtn.addEventListener("click", () => {
       this.exportLayer(theme, sourceLayer);
     });
 
@@ -1603,66 +1688,72 @@ export class OvertureMapsControl implements IControl {
    * @param sourceLayer - The source-layer name
    * @returns The editor element
    */
-  private _createLayerEditor(theme: OvertureTheme, sourceLayer: string): HTMLElement {
+  private _createLayerEditor(
+    theme: OvertureTheme,
+    sourceLayer: string,
+  ): HTMLElement {
     const layerState = this._state.themes[theme].layers[sourceLayer];
     const label = this._humanizeLayer(sourceLayer);
-    const geometry = findLayerDef(theme, sourceLayer)?.geometry ?? 'point';
-    const isPoint = geometry === 'point';
+    const geometry = findLayerDef(theme, sourceLayer)?.geometry ?? "point";
+    const isPoint = geometry === "point";
 
-    const editor = document.createElement('div');
-    editor.className = 'overture-layer-editor';
+    const editor = document.createElement("div");
+    editor.className = "overture-layer-editor";
 
     // Color
-    const colorRow = document.createElement('label');
-    colorRow.className = 'overture-style-field';
-    const colorName = document.createElement('span');
-    colorName.textContent = 'Color';
-    const colorInput = document.createElement('input');
-    colorInput.type = 'color';
-    colorInput.className = 'overture-layer-color';
+    const colorRow = document.createElement("label");
+    colorRow.className = "overture-style-field";
+    const colorName = document.createElement("span");
+    colorName.textContent = "Color";
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.className = "overture-layer-color";
     colorInput.value = layerState.color;
-    colorInput.setAttribute('aria-label', `${label} color`);
-    colorInput.addEventListener('input', () => {
+    colorInput.setAttribute("aria-label", `${label} color`);
+    colorInput.addEventListener("input", () => {
       this.setLayerColor(theme, sourceLayer, colorInput.value);
     });
     colorRow.appendChild(colorName);
     colorRow.appendChild(colorInput);
 
     // Size (circle radius for points, line width otherwise)
-    const sizeRow = document.createElement('label');
-    sizeRow.className = 'overture-style-field';
-    const sizeName = document.createElement('span');
-    sizeName.textContent = isPoint ? 'Radius' : 'Width';
-    const sizeInput = document.createElement('input');
-    sizeInput.type = 'range';
-    sizeInput.className = 'overture-layer-size';
-    sizeInput.min = isPoint ? '1' : '0.5';
-    sizeInput.max = isPoint ? '12' : '6';
-    sizeInput.step = '0.5';
+    const sizeRow = document.createElement("label");
+    sizeRow.className = "overture-style-field";
+    const sizeName = document.createElement("span");
+    sizeName.textContent = isPoint ? "Radius" : "Width";
+    const sizeInput = document.createElement("input");
+    sizeInput.type = "range";
+    sizeInput.className = "overture-layer-size";
+    sizeInput.min = isPoint ? "1" : "0.5";
+    sizeInput.max = isPoint ? "12" : "6";
+    sizeInput.step = "0.5";
     sizeInput.value = String(layerState.size);
     sizeInput.disabled = !layerState.visible;
-    sizeInput.setAttribute('aria-label', `${label} ${isPoint ? 'radius' : 'width'}`);
-    sizeInput.addEventListener('input', () => {
+    sizeInput.setAttribute(
+      "aria-label",
+      `${label} ${isPoint ? "radius" : "width"}`,
+    );
+    sizeInput.addEventListener("input", () => {
       this.setLayerSize(theme, sourceLayer, Number(sizeInput.value));
     });
     sizeRow.appendChild(sizeName);
     sizeRow.appendChild(sizeInput);
 
     // Opacity
-    const opacityRow = document.createElement('label');
-    opacityRow.className = 'overture-style-field';
-    const opacityName = document.createElement('span');
-    opacityName.textContent = 'Opacity';
-    const opacityInput = document.createElement('input');
-    opacityInput.type = 'range';
-    opacityInput.className = 'overture-layer-opacity';
-    opacityInput.min = '0';
-    opacityInput.max = '1';
-    opacityInput.step = '0.05';
+    const opacityRow = document.createElement("label");
+    opacityRow.className = "overture-style-field";
+    const opacityName = document.createElement("span");
+    opacityName.textContent = "Opacity";
+    const opacityInput = document.createElement("input");
+    opacityInput.type = "range";
+    opacityInput.className = "overture-layer-opacity";
+    opacityInput.min = "0";
+    opacityInput.max = "1";
+    opacityInput.step = "0.05";
     opacityInput.value = String(layerState.opacity);
     opacityInput.disabled = !layerState.visible;
-    opacityInput.setAttribute('aria-label', `${label} opacity`);
-    opacityInput.addEventListener('input', () => {
+    opacityInput.setAttribute("aria-label", `${label} opacity`);
+    opacityInput.addEventListener("input", () => {
       this.setLayerOpacity(theme, sourceLayer, Number(opacityInput.value));
     });
     opacityRow.appendChild(opacityName);
@@ -1681,7 +1772,7 @@ export class OvertureMapsControl implements IControl {
    * @returns A display label (e.g. `Land cover`)
    */
   private _humanizeLayer(sourceLayer: string): string {
-    const spaced = sourceLayer.replace(/_/g, ' ');
+    const spaced = sourceLayer.replace(/_/g, " ");
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
 
@@ -1691,19 +1782,25 @@ export class OvertureMapsControl implements IControl {
    * @param group - The theme group element
    * @param theme - The theme the group represents
    */
-  private _applyThemeGroupState(group: HTMLElement, theme: OvertureTheme): void {
+  private _applyThemeGroupState(
+    group: HTMLElement,
+    theme: OvertureTheme,
+  ): void {
     const themeState = this._state.themes[theme];
-    group.classList.toggle('expanded', themeState.expanded);
+    group.classList.toggle("expanded", themeState.expanded);
 
-    const caret = group.querySelector<HTMLElement>('.overture-theme-caret');
-    caret?.setAttribute('aria-expanded', String(themeState.expanded));
+    const caret = group.querySelector<HTMLElement>(".overture-theme-caret");
+    caret?.setAttribute("aria-expanded", String(themeState.expanded));
 
     const layerStates = Object.values(themeState.layers);
     const visibleCount = layerStates.filter((l) => l.visible).length;
-    const checkbox = group.querySelector<HTMLInputElement>('.overture-theme-checkbox');
+    const checkbox = group.querySelector<HTMLInputElement>(
+      ".overture-theme-checkbox",
+    );
     if (checkbox) {
       checkbox.checked = visibleCount === layerStates.length;
-      checkbox.indeterminate = visibleCount > 0 && visibleCount < layerStates.length;
+      checkbox.indeterminate =
+        visibleCount > 0 && visibleCount < layerStates.length;
     }
   }
 
@@ -1714,7 +1811,7 @@ export class OvertureMapsControl implements IControl {
    */
   private _syncThemeGroup(theme: OvertureTheme): void {
     const group = this._panel?.querySelector<HTMLElement>(
-      `.overture-theme-group[data-theme="${theme}"]`
+      `.overture-theme-group[data-theme="${theme}"]`,
     );
     if (!group) {
       return;
@@ -1733,18 +1830,28 @@ export class OvertureMapsControl implements IControl {
    */
   private _syncLayerRow(theme: OvertureTheme, sourceLayer: string): void {
     const row = this._panel?.querySelector<HTMLElement>(
-      `.overture-theme-group[data-theme="${theme}"] .overture-layer-row[data-layer="${sourceLayer}"]`
+      `.overture-theme-group[data-theme="${theme}"] .overture-layer-row[data-layer="${sourceLayer}"]`,
     );
     if (!row) {
       return;
     }
     const layerState = this._state.themes[theme].layers[sourceLayer];
-    const checkbox = row.querySelector<HTMLInputElement>('.overture-layer-checkbox');
-    const swatch = row.querySelector<HTMLElement>('.overture-layer-swatch');
-    const colorInput = row.querySelector<HTMLInputElement>('.overture-layer-color');
-    const sizeInput = row.querySelector<HTMLInputElement>('.overture-layer-size');
-    const opacityInput = row.querySelector<HTMLInputElement>('.overture-layer-opacity');
-    const exportBtn = row.querySelector<HTMLButtonElement>('.overture-layer-export-btn');
+    const checkbox = row.querySelector<HTMLInputElement>(
+      ".overture-layer-checkbox",
+    );
+    const swatch = row.querySelector<HTMLElement>(".overture-layer-swatch");
+    const colorInput = row.querySelector<HTMLInputElement>(
+      ".overture-layer-color",
+    );
+    const sizeInput = row.querySelector<HTMLInputElement>(
+      ".overture-layer-size",
+    );
+    const opacityInput = row.querySelector<HTMLInputElement>(
+      ".overture-layer-opacity",
+    );
+    const exportBtn = row.querySelector<HTMLButtonElement>(
+      ".overture-layer-export-btn",
+    );
     if (checkbox) {
       checkbox.checked = layerState.visible;
     }
@@ -1780,12 +1887,12 @@ export class OvertureMapsControl implements IControl {
     const startX = event.clientX;
     const startWidth = this._panel.getBoundingClientRect().width;
     const position = this._getControlPosition();
-    const anchorLeft = position === 'top-left' || position === 'bottom-left';
-    this._panel.classList.add('resizing');
+    const anchorLeft = position === "top-left" || position === "bottom-left";
+    this._panel.classList.add("resizing");
 
     const maxWidth = Math.min(
       MAX_PANEL_WIDTH,
-      (this._mapContainer?.clientWidth ?? window.innerWidth) - 20
+      (this._mapContainer?.clientWidth ?? window.innerWidth) - 20,
     );
 
     this._resizePointerMove = (e: PointerEvent) => {
@@ -1803,19 +1910,19 @@ export class OvertureMapsControl implements IControl {
 
     this._resizePointerUp = () => {
       if (this._resizePointerMove) {
-        document.removeEventListener('pointermove', this._resizePointerMove);
+        document.removeEventListener("pointermove", this._resizePointerMove);
         this._resizePointerMove = null;
       }
       if (this._resizePointerUp) {
-        document.removeEventListener('pointerup', this._resizePointerUp);
+        document.removeEventListener("pointerup", this._resizePointerUp);
         this._resizePointerUp = null;
       }
-      this._panel?.classList.remove('resizing');
-      this._emit('statechange');
+      this._panel?.classList.remove("resizing");
+      this._emit("statechange");
     };
 
-    document.addEventListener('pointermove', this._resizePointerMove);
-    document.addEventListener('pointerup', this._resizePointerUp);
+    document.addEventListener("pointermove", this._resizePointerMove);
+    document.addEventListener("pointerup", this._resizePointerUp);
   }
 
   /**
@@ -1837,7 +1944,7 @@ export class OvertureMapsControl implements IControl {
         this.collapse();
       }
     };
-    document.addEventListener('click', this._clickOutsideHandler);
+    document.addEventListener("click", this._clickOutsideHandler);
 
     // Update panel position on window resize
     this._resizeHandler = () => {
@@ -1845,7 +1952,7 @@ export class OvertureMapsControl implements IControl {
         this._updatePanelPosition();
       }
     };
-    window.addEventListener('resize', this._resizeHandler);
+    window.addEventListener("resize", this._resizeHandler);
 
     // Update panel position on map resize (e.g., sidebar toggle)
     this._mapResizeHandler = () => {
@@ -1853,7 +1960,7 @@ export class OvertureMapsControl implements IControl {
         this._updatePanelPosition();
       }
     };
-    this._map?.on('resize', this._mapResizeHandler);
+    this._map?.on("resize", this._mapResizeHandler);
   }
 
   /**
@@ -1861,16 +1968,24 @@ export class OvertureMapsControl implements IControl {
    *
    * @returns The position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
    */
-  private _getControlPosition(): 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' {
+  private _getControlPosition():
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right" {
     const parent = this._container?.parentElement;
-    if (!parent) return 'top-right'; // Default
+    if (!parent) return "top-right"; // Default
 
-    if (parent.classList.contains('maplibregl-ctrl-top-left')) return 'top-left';
-    if (parent.classList.contains('maplibregl-ctrl-top-right')) return 'top-right';
-    if (parent.classList.contains('maplibregl-ctrl-bottom-left')) return 'bottom-left';
-    if (parent.classList.contains('maplibregl-ctrl-bottom-right')) return 'bottom-right';
+    if (parent.classList.contains("maplibregl-ctrl-top-left"))
+      return "top-left";
+    if (parent.classList.contains("maplibregl-ctrl-top-right"))
+      return "top-right";
+    if (parent.classList.contains("maplibregl-ctrl-bottom-left"))
+      return "bottom-left";
+    if (parent.classList.contains("maplibregl-ctrl-bottom-right"))
+      return "bottom-right";
 
-    return 'top-right'; // Default
+    return "top-right"; // Default
   }
 
   /**
@@ -1881,7 +1996,7 @@ export class OvertureMapsControl implements IControl {
     if (!this._container || !this._panel || !this._mapContainer) return;
 
     // Get the toggle button (first child of container)
-    const button = this._container.querySelector('.overture-control-toggle');
+    const button = this._container.querySelector(".overture-control-toggle");
     if (!button) return;
 
     const buttonRect = button.getBoundingClientRect();
@@ -1889,9 +2004,9 @@ export class OvertureMapsControl implements IControl {
     const position = this._getControlPosition();
 
     // Mark the anchored edge so the resize handle sits on the free side
-    const anchorLeft = position === 'top-left' || position === 'bottom-left';
-    this._panel.classList.toggle('ovt-anchor-left', anchorLeft);
-    this._panel.classList.toggle('ovt-anchor-right', !anchorLeft);
+    const anchorLeft = position === "top-left" || position === "bottom-left";
+    this._panel.classList.toggle("ovt-anchor-left", anchorLeft);
+    this._panel.classList.toggle("ovt-anchor-right", !anchorLeft);
 
     // Calculate button position relative to map container
     const buttonTop = buttonRect.top - mapRect.top;
@@ -1903,47 +2018,49 @@ export class OvertureMapsControl implements IControl {
     const edgeMargin = 10; // Keep the panel off the opposite map edge
 
     // Reset all positioning
-    this._panel.style.top = '';
-    this._panel.style.bottom = '';
-    this._panel.style.left = '';
-    this._panel.style.right = '';
+    this._panel.style.top = "";
+    this._panel.style.bottom = "";
+    this._panel.style.left = "";
+    this._panel.style.right = "";
 
     // Cap the panel height to the space between the button and the
     // opposite map edge so the content area scrolls instead of the
     // panel overflowing the viewport (important on small screens).
     const offset =
-      position === 'top-left' || position === 'top-right'
+      position === "top-left" || position === "top-right"
         ? buttonTop + buttonRect.height + panelGap
         : buttonBottom + buttonRect.height + panelGap;
     const available = Math.max(120, mapRect.height - offset - edgeMargin);
     this._panel.style.maxHeight = `${Math.min(500, available)}px`;
 
     // Let the panel max-height drive content scrolling
-    const content = this._panel.querySelector<HTMLElement>('.overture-control-content');
+    const content = this._panel.querySelector<HTMLElement>(
+      ".overture-control-content",
+    );
     if (content) {
-      content.style.maxHeight = 'none';
+      content.style.maxHeight = "none";
     }
 
     switch (position) {
-      case 'top-left':
+      case "top-left":
         // Panel expands down and to the right
         this._panel.style.top = `${buttonTop + buttonRect.height + panelGap}px`;
         this._panel.style.left = `${buttonLeft}px`;
         break;
 
-      case 'top-right':
+      case "top-right":
         // Panel expands down and to the left
         this._panel.style.top = `${buttonTop + buttonRect.height + panelGap}px`;
         this._panel.style.right = `${buttonRight}px`;
         break;
 
-      case 'bottom-left':
+      case "bottom-left":
         // Panel expands up and to the right
         this._panel.style.bottom = `${buttonBottom + buttonRect.height + panelGap}px`;
         this._panel.style.left = `${buttonLeft}px`;
         break;
 
-      case 'bottom-right':
+      case "bottom-right":
         // Panel expands up and to the left
         this._panel.style.bottom = `${buttonBottom + buttonRect.height + panelGap}px`;
         this._panel.style.right = `${buttonRight}px`;
