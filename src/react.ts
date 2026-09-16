@@ -1,8 +1,8 @@
 // React entry point
-export { OvertureMapsControlReact } from './lib/core/OvertureMapsControlReact';
+export { OvertureMapsControlReact } from "./lib/core/OvertureMapsControlReact";
 
 // React hooks
-export { useOvertureMapsState } from './lib/hooks';
+export { useOvertureMapsState } from "./lib/hooks";
 
 // Re-export types for React consumers
 export type {
@@ -14,10 +14,12 @@ export type {
   OvertureMapsEvent,
   OvertureMapsEventHandler,
   ControlColorScheme,
-} from './lib/core/types';
+  OverturePopup,
+  OverturePopupOptions,
+} from "./lib/core/types";
 export type {
   OvertureTheme,
   OvertureGeometry,
   OvertureLayerDef,
   ThemeDefinition,
-} from './lib/core/themes';
+} from "./lib/core/themes";
