@@ -70,6 +70,12 @@ describe('sourceIdForTheme / tileUrlForTheme', () => {
       'pmtiles://https://tiles.example.com/2026-05-20.0/base.pmtiles'
     );
   });
+
+  it('emits the plain archive URL for an engine that reads pmtiles natively', () => {
+    expect(tileUrlForTheme('https://tiles.example.com/', '2026-05-20.0', 'base', true)).toBe(
+      'https://tiles.example.com/2026-05-20.0/base.pmtiles'
+    );
+  });
 });
 
 describe('buildLayerSpecs', () => {

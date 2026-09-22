@@ -10,7 +10,7 @@ A [MapLibre GL JS](https://maplibre.org/) plugin for visualizing [Overture Maps]
 ## Features
 
 - **All six Overture themes** - Addresses, base, buildings, divisions, places, and transportation, each loaded from the official Overture PMTiles distribution
-- **Dynamic releases** - Fetches the latest [Overture release list](https://labs.overturemaps.org/data/releases.json) at runtime, with a dropdown to switch releases and an option to pin one
+- **Dynamic releases** - Discovers the releases the [Overture PMTiles distribution](https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/) actually carries at runtime, with a dropdown to switch releases and an option to pin one
 - **Per-layer styling** - Expand a theme to toggle each source layer individually; a style button opens an inline editor for the layer's color, size (point radius / line width), and opacity
 - **GeoJSON export** - A download button on each layer exports the features rendered in the current map view to a GeoJSON file. Gated by a minimum zoom (`exportMinZoom`) so exports stay limited to a small area
 - **Feature inspection** - Click any rendered Overture feature to see its properties in a popup; toggle the picker on or off from the panel
@@ -133,14 +133,17 @@ The main control class implementing MapLibre's `IControl` interface.
 | `panelWidth`    | `number`                      | `300`                                         | Width of the dropdown panel in pixels                                     |
 | `className`     | `string`                      | `''`                                          | Custom CSS class name                                                     |
 | `theme`         | `'light' \| 'dark' \| 'auto'` | `'auto'`                                      | UI color scheme; `'auto'` follows `prefers-color-scheme`                  |
-| `release`       | `string`                      | latest                                        | Pin a specific Overture release (e.g. `'2026-05-20.0'`)                   |
-| `releasesUrl`   | `string`                      | Overture labs releases.json                   | Endpoint listing available releases                                       |
+| `release`       | `string`                      | latest                                        | Pin a specific Overture release (e.g. `'2026-08-19.0'`)                   |
+| `releasesUrl`   | `string`                      | _unset_                                       | releases.json endpoint to read instead of listing the distribution        |
 | `tilesBaseUrl`  | `string`                      | Official Overture S3 tiles URL                | Base URL of the PMTiles distribution                                      |
 | `inspect`       | `boolean`                     | `true`                                        | Click a rendered feature to open a properties popup                       |
 | `exportMinZoom` | `number`                      | `12`                                          | Minimum zoom required to export a layer to GeoJSON (keeps exports limited to a small area)  |
 | `visibleThemes` | `OvertureTheme[]`             | `['buildings', 'transportation', 'places']`   | Themes that start visible                                                 |
 | `themeColors`   | `Partial<Record<OvertureTheme, string>>` | x-ray palette                       | Per-theme color overrides                                                 |
 | `themeOpacity`  | `Partial<Record<OvertureTheme, number>>` | `0.8`                               | Per-theme initial opacity (0..1)                                          |
+| `onExport`      | `(filename, data) => void`    | browser download                              | Custom handler for the GeoJSON export (e.g. a native save dialog)         |
+| `nativePmtiles` | `boolean`                     | `false`                                       | Emit plain `https://` archive URLs and skip `addProtocol`, for an engine that reads `.pmtiles` natively (Mapbox GL JS 3.30+) |
+| `createPopup`   | `(options) => OverturePopup`  | MapLibre `Popup`                              | Factory for the inspection popup, e.g. mapbox-gl's `Popup` on a Mapbox map |
 
 #### Methods
 
@@ -202,7 +205,7 @@ const {
 
 ### Exported Types
 
-Exported from both entry points: `OvertureMapsControlOptions`, `OvertureMapsState`, `OvertureThemeState`, `OvertureLayerState`, `OvertureMapsEvent`, `OvertureMapsEventHandler`, `OvertureTheme`, `OvertureGeometry`, `OvertureLayerDef`, `ThemeDefinition`, and `ControlColorScheme`.
+Exported from both entry points: `OvertureMapsControlOptions`, `OvertureMapsState`, `OvertureThemeState`, `OvertureLayerState`, `OvertureMapsEvent`, `OvertureMapsEventHandler`, `OvertureTheme`, `OvertureGeometry`, `OvertureLayerDef`, `ThemeDefinition`, `ControlColorScheme`, `OverturePopup`, and `OverturePopupOptions`.
 
 Main entry only (`.`): `ReleasesResponse`. React entry only (`/react`): `OvertureMapsControlReactProps`.
 
@@ -357,6 +360,7 @@ docker run -p 8080:80 maplibre-gl-overture-maps
 - Overture tiles are designed for x-ray inspection, not as a production basemap. See the [Overture tiles docs](https://docs.overturemaps.org/examples/overture-tiles/).
 - The `addresses` and `places` themes only contain features at zoom 14 and above.
 - If the release list cannot be fetched (e.g. offline), the control falls back to a known release and emits an `error` event; pin a release with the `release` option to skip the fetch dependency.
+- The control only uses the Style Spec surface MapLibre and Mapbox GL JS share, so it can be mounted on a mapbox-gl map (3.30+, which reads `.pmtiles` archives natively) with `nativePmtiles: true` and `createPopup: (options) => new mapboxgl.Popup(options)`. The control is typed against MapLibre's `IControl`; the runtime contract is the same, so cast it (`map.addControl(control as unknown as mapboxgl.IControl)`) or wrap it in a small adapter as a host that supports both engines would. Its container carries both engines' control classes and it reads its corner from either engine's corner container.
 
 ## License
 
