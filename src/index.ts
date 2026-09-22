@@ -22,8 +22,12 @@ export {
 
 // Releases helpers
 export {
+  resolveReleases,
+  listTileReleases,
+  fetchStacLatest,
   fetchReleases,
   DEFAULT_RELEASES_URL,
+  DEFAULT_STAC_CATALOG_URL,
   DEFAULT_TILES_BASE_URL,
   FALLBACK_RELEASE,
 } from './lib/core/releases';
@@ -49,7 +53,7 @@ export type {
   OvertureLayerDef,
   ThemeDefinition,
 } from './lib/core/themes';
-export type { ReleasesResponse } from './lib/core/releases';
+export type { ReleasesResponse, ResolveReleasesOptions } from './lib/core/releases';
 
 // Utility exports
 export {

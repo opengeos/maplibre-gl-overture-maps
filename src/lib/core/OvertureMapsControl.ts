@@ -26,12 +26,7 @@ import {
   tileUrlForTheme,
 } from "./themes";
 import type { OvertureTheme } from "./themes";
-import {
-  DEFAULT_RELEASES_URL,
-  DEFAULT_TILES_BASE_URL,
-  FALLBACK_RELEASE,
-  fetchReleases,
-} from "./releases";
+import { DEFAULT_TILES_BASE_URL, FALLBACK_RELEASE, resolveReleases } from "./releases";
 import { ensurePmtilesProtocol } from "./pmtilesProtocol";
 
 /**
@@ -40,12 +35,12 @@ import { ensurePmtilesProtocol } from "./pmtilesProtocol";
 const DEFAULT_OPTIONS: Required<
   Omit<
     OvertureMapsControlOptions,
-    "release" | "themeColors" | "themeOpacity" | "onExport" | "createPopup"
+    "release" | "releasesUrl" | "themeColors" | "themeOpacity" | "onExport" | "createPopup"
   >
 > &
   Pick<
     OvertureMapsControlOptions,
-    "release" | "themeColors" | "themeOpacity" | "onExport" | "createPopup"
+    "release" | "releasesUrl" | "themeColors" | "themeOpacity" | "onExport" | "createPopup"
   > = {
   collapsed: true,
   position: "top-right",
@@ -54,7 +49,11 @@ const DEFAULT_OPTIONS: Required<
   className: "",
   theme: "auto",
   release: undefined,
-  releasesUrl: DEFAULT_RELEASES_URL,
+  // Left unset on purpose: the releases.json Overture published is frozen and
+  // names a release whose tiles are gone, so the control discovers releases
+  // from the distribution itself (issue #12). Setting this opts back into a
+  // releases.json, for a self-hosted mirror.
+  releasesUrl: undefined,
   tilesBaseUrl: DEFAULT_TILES_BASE_URL,
   inspect: true,
   exportMinZoom: 12,
@@ -844,7 +843,10 @@ export class OvertureMapsControl implements IControl {
    * @returns The available releases, newest first
    */
   async refreshReleases(): Promise<string[]> {
-    const { latest, releases } = await fetchReleases(this._options.releasesUrl);
+    const { latest, releases } = await resolveReleases({
+      releasesUrl: this._options.releasesUrl,
+      tilesBaseUrl: this._options.tilesBaseUrl,
+    });
     this._state.releases = releases;
     if (!this._state.release) {
       this._state.release = latest;

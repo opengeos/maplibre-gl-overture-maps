@@ -10,7 +10,7 @@ A [MapLibre GL JS](https://maplibre.org/) plugin for visualizing [Overture Maps]
 ## Features
 
 - **All six Overture themes** - Addresses, base, buildings, divisions, places, and transportation, each loaded from the official Overture PMTiles distribution
-- **Dynamic releases** - Fetches the latest [Overture release list](https://labs.overturemaps.org/data/releases.json) at runtime, with a dropdown to switch releases and an option to pin one
+- **Dynamic releases** - Discovers the releases the [Overture PMTiles distribution](https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/) actually carries at runtime, with a dropdown to switch releases and an option to pin one
 - **Per-layer styling** - Expand a theme to toggle each source layer individually; a style button opens an inline editor for the layer's color, size (point radius / line width), and opacity
 - **GeoJSON export** - A download button on each layer exports the features rendered in the current map view to a GeoJSON file. Gated by a minimum zoom (`exportMinZoom`) so exports stay limited to a small area
 - **Feature inspection** - Click any rendered Overture feature to see its properties in a popup; toggle the picker on or off from the panel
@@ -133,8 +133,8 @@ The main control class implementing MapLibre's `IControl` interface.
 | `panelWidth`    | `number`                      | `300`                                         | Width of the dropdown panel in pixels                                     |
 | `className`     | `string`                      | `''`                                          | Custom CSS class name                                                     |
 | `theme`         | `'light' \| 'dark' \| 'auto'` | `'auto'`                                      | UI color scheme; `'auto'` follows `prefers-color-scheme`                  |
-| `release`       | `string`                      | latest                                        | Pin a specific Overture release (e.g. `'2026-05-20.0'`)                   |
-| `releasesUrl`   | `string`                      | Overture labs releases.json                   | Endpoint listing available releases                                       |
+| `release`       | `string`                      | latest                                        | Pin a specific Overture release (e.g. `'2026-08-19.0'`)                   |
+| `releasesUrl`   | `string`                      | _unset_                                       | releases.json endpoint to read instead of listing the distribution        |
 | `tilesBaseUrl`  | `string`                      | Official Overture S3 tiles URL                | Base URL of the PMTiles distribution                                      |
 | `inspect`       | `boolean`                     | `true`                                        | Click a rendered feature to open a properties popup                       |
 | `exportMinZoom` | `number`                      | `12`                                          | Minimum zoom required to export a layer to GeoJSON (keeps exports limited to a small area)  |

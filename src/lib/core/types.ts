@@ -51,14 +51,18 @@ export interface OvertureMapsControlOptions {
   theme?: ControlColorScheme;
 
   /**
-   * Pin a specific Overture release (e.g. `'2026-05-20.0'`).
-   * When omitted, the latest release from {@link releasesUrl} is used.
+   * Pin a specific Overture release (e.g. `'2026-08-19.0'`).
+   * When omitted, the newest release carried by {@link tilesBaseUrl} is used.
    */
   release?: string;
 
   /**
-   * Endpoint listing available Overture releases
-   * @default 'https://labs.overturemaps.org/data/releases.json'
+   * Endpoint listing available Overture releases, in releases.json shape.
+   *
+   * Unset by default: Overture froze the releases.json it published at a
+   * release whose tiles have since been removed, so releases are discovered
+   * from {@link tilesBaseUrl} instead. Set this to point at a mirror that
+   * still publishes that document.
    */
   releasesUrl?: string;
 
